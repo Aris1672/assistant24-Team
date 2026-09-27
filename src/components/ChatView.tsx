@@ -175,7 +175,7 @@ export default function ChatView({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-neutral-950">
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-4 md:px-6">
         <Link
           href="/"

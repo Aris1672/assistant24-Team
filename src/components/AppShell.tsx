@@ -15,7 +15,7 @@ export default function AppShell({
   const isChannelOpen = pathname?.startsWith("/channel/");
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
+    <div className="flex h-screen w-full overflow-hidden bg-neutral-950">
       {/* On phone widths, show either the conversation list OR the open
           chat, never both — the list is the "home" view, hidden once a
           channel is open. From md breakpoint up, both stay visible
@@ -24,7 +24,7 @@ export default function AppShell({
         <Sidebar currentUser={currentUser} />
       </div>
       <main
-        className={`${isChannelOpen ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}
+        className={`${isChannelOpen ? "flex" : "hidden"} min-w-0 flex-1 flex-col bg-neutral-950 md:flex`}
       >
         {children}
       </main>
