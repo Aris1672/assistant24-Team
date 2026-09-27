@@ -114,7 +114,7 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   }
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-neutral-800 bg-neutral-925 bg-neutral-900">
+    <aside className="flex w-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-925 bg-neutral-900 md:w-72">
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-4">
         <div>
           <p className="text-sm font-semibold text-neutral-100">TeamChat</p>

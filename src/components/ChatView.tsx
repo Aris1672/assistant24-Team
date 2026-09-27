@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Channel, Message, Profile, Attachment } from "@/lib/types";
 import AttachmentLink from "./AttachmentLink";
@@ -175,13 +176,22 @@ export default function ChatView({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-neutral-800 px-6 py-4">
-        <h1 className="text-base font-semibold text-neutral-100">{title}</h1>
-        {!channel.is_dm && (
-          <p className="text-xs text-neutral-500">
-            {members.map((m) => m.display_name).join(", ")}
-          </p>
-        )}
+      <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-4 md:px-6">
+        <Link
+          href="/"
+          className="-ml-1 rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 md:hidden"
+          aria-label="Back to conversations"
+        >
+          ←
+        </Link>
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold text-neutral-100">{title}</h1>
+          {!channel.is_dm && (
+            <p className="truncate text-xs text-neutral-500">
+              {members.map((m) => m.display_name).join(", ")}
+            </p>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
