@@ -1,11 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { AUTH_COOKIE_NAME } from "./cookie-name";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback"];
 
 // See server.ts — prefer the direct plain-HTTP Supabase URL for this
 // server-side check; falls back to the browser's proxied URL if that's
-// the only one configured.
+// the only one configured. The explicit cookieOptions.name below is what
+// actually matters for session recognition to work (see cookie-name.ts).
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
 export async function updateSession(request: NextRequest) {
@@ -15,6 +17,7 @@ export async function updateSession(request: NextRequest) {
     SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: { name: AUTH_COOKIE_NAME },
       cookies: {
         getAll() {
           return request.cookies.getAll();
