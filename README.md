@@ -189,7 +189,59 @@ just inherited) on `<html>`, `<body>`, `AppShell.tsx`'s outer wrapper and
 container is ever added, give it an explicit `bg-neutral-950` too** rather
 than relying on inheritance, to avoid this resurfacing on some devices.
 
-### 9. Language switcher is a lightweight custom context, not a library
+### 9. Realtime WebSocket needs a custom server + a Docker network alias fix
+
+New messages initially only appeared after a manual page refresh — the
+Supabase Realtime subscription (`ChatView.tsx`, `Sidebar.tsx`) never actually
+delivered live events. This had **two separate causes**, both now fixed:
+
+**a) Next.js `rewrites()` cannot proxy WebSocket upgrades.** The `/supabase/*`
+rewrite in `next.config.ts` only forwards ordinary HTTP request/response
+calls (REST/Auth/Storage) — it silently does not forward the `Upgrade:
+websocket` handshake Realtime needs, so the connection never even attempted
+to reach Supabase. **Fix:** `server.js` is a custom server (replacing plain
+`next start`) that listens for the raw HTTP `upgrade` event and proxies
+`/supabase/realtime/*` directly to the Supabase host using `http-proxy`,
+stripping the `/supabase` prefix so Envoy/Kong sees the path it expects
+(`/realtime/v1/websocket`). Because of this custom server, `output:
+"standalone"` was removed from `next.config.ts` (a standalone build's
+generated `server.js` can't easily be extended with a custom `upgrade`
+handler) — the Docker image ships full `node_modules` instead, which is a
+non-issue for an internal tool. **`npm start` now runs `node server.js`, not
+`next start`.**
+
+**b) Stack 7's Realtime container wasn't reachable by its expected internal
+DNS name.** Even after (a) was fixed, the self-hosted stack's `envoy`
+gateway returned `503 no healthy upstream` for every Realtime request. Cause:
+Envoy's static config (`/etc/envoy/cds.yaml` inside the `teamchat-supabase-envoy`
+container) hardcodes the Realtime upstream's hostname as
+`realtime-dev.supabase-realtime` — but that container was renamed to
+`teamchat-realtime-dev.supabase-realtime` per this stack's container-naming
+convention, so Docker's internal DNS no longer resolved the name Envoy was
+looking for. Every other renamed service happened not to hit this same
+DNS-based health check, which is why only Realtime broke. **Fix:** added a
+Docker network alias so the container answers to both names — in
+`~/supabase-teamchat/docker/docker-compose.yml`, the `realtime:` service now
+has:
+```yaml
+    networks:
+      default:
+        aliases:
+          - realtime-dev.supabase-realtime
+```
+This is permanent (survives `docker compose up -d`/restarts). **If any other
+self-hosted Supabase container is ever renamed away from its stock name,
+check whether Envoy's `cds.yaml` hardcodes that name too — the same
+`no healthy upstream` symptom will recur for that service.** Diagnose with:
+```bash
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  "http://<supabase-host>:<port>/realtime/v1/websocket?apikey=<ANON_KEY>&vsn=2.0.0"
+```
+run directly on the Supabase VPS — `101 Switching Protocols` means Realtime
+itself is fine; `503 no healthy upstream` points at this DNS/alias issue.
+
+### 10. Language switcher is a lightweight custom context, not a library
 
 The app's text surface is small, so i18n is a hand-rolled
 `LanguageProvider` (`src/lib/i18n/`) rather than a full library like
