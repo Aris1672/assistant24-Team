@@ -2,7 +2,12 @@
 FROM node:20-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# Using `npm install` rather than `npm ci` here: the committed lockfile can
+# drift slightly from package.json when `npm install` is run locally on a
+# different OS/npm version (e.g. picks up different platform-specific
+# optional dependencies for native addons like lightningcss). `npm ci`
+# refuses to install at all when that happens; `npm install` reconciles it.
+RUN npm install
 
 # --- build ---------------------------------------------------------------
 FROM node:20-slim AS builder
