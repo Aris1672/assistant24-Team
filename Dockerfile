@@ -32,15 +32,24 @@ ENV SUPABASE_SERVICE_ROLE_KEY=placeholder-replaced-at-runtime
 RUN npm run build
 
 # --- runtime ---------------------------------------------------------------
+# Not using `.next/standalone` here: this app runs a small custom server.js
+# (see that file) so it can proxy the Supabase Realtime WebSocket upgrade,
+# which Next.js's own `rewrites()` cannot forward. A standalone build's
+# generated server.js can't easily be extended with a custom `upgrade`
+# handler, so the runtime image ships full node_modules instead — fine for
+# an internal tool where a slightly larger image doesn't matter.
 FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/server.js ./server.js
 
 EXPOSE 3000
 CMD ["node", "server.js"]
