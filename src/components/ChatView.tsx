@@ -1,0 +1,289 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { Channel, Message, Profile, Attachment } from "@/lib/types";
+import AttachmentLink from "./AttachmentLink";
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export default function ChatView({
+  channel,
+  members,
+  initialMessages,
+  currentUserId,
+}: {
+  channel: Channel;
+  members: Profile[];
+  initialMessages: Message[];
+  currentUserId: string;
+}) {
+  const supabase = createClient();
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [body, setBody] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const title = channel.is_dm
+    ? members.find((m) => m.id !== currentUserId)?.display_name ?? "Direct message"
+    : `# ${channel.name}`;
+
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    const sub = supabase
+      .channel(`channel-${channel.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `channel_id=eq.${channel.id}`,
+        },
+        async (payload) => {
+          const newMsg = payload.new as Message;
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", newMsg.sender_id)
+            .single();
+          setMessages((prev) =>
+            prev.some((m) => m.id === newMsg.id)
+              ? prev
+              : [...prev, { ...newMsg, sender: sender ?? undefined, attachments: [] }]
+          );
+
+          if (newMsg.sender_id !== currentUserId) {
+            await supabase
+              .from("channel_members")
+              .update({ last_read_at: new Date().toISOString() })
+              .eq("channel_id", channel.id)
+              .eq("user_id", currentUserId);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "attachments",
+          filter: `channel_id=eq.${channel.id}`,
+        },
+        (payload) => {
+          const att = payload.new as Attachment;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === att.message_id
+                ? { ...m, attachments: [...(m.attachments ?? []), att] }
+                : m
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sub);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel.id, currentUserId]);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!body.trim() && files.length === 0) return;
+    setSending(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: inserted, error } = await supabase
+        .from("messages")
+        .insert({ channel_id: channel.id, sender_id: user.id, body: body.trim() || null })
+        .select()
+        .single();
+
+      if (error || !inserted) throw error;
+
+      // Optimistically show it locally (realtime will also deliver it; dedupe by id).
+      setMessages((prev) =>
+        prev.some((m) => m.id === inserted.id)
+          ? prev
+          : [...prev, { ...inserted, sender: undefined, attachments: [] }]
+      );
+
+      for (const file of files) {
+        const path = `${channel.id}/${inserted.id}/${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(path, file, { upsert: false });
+        if (uploadError) throw uploadError;
+
+        const { data: att, error: attError } = await supabase
+          .from("attachments")
+          .insert({
+            message_id: inserted.id,
+            channel_id: channel.id,
+            uploader_id: user.id,
+            storage_path: path,
+            file_name: file.name,
+            content_type: file.type || null,
+            size_bytes: file.size,
+          })
+          .select()
+          .single();
+        if (attError) throw attError;
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === inserted.id
+              ? { ...m, attachments: [...(m.attachments ?? []), att] }
+              : m
+          )
+        );
+      }
+
+      setBody("");
+      setFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (err) {
+      console.error(err);
+      alert("Failed to send message. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <header className="border-b border-neutral-800 px-6 py-4">
+        <h1 className="text-base font-semibold text-neutral-100">{title}</h1>
+        {!channel.is_dm && (
+          <p className="text-xs text-neutral-500">
+            {members.map((m) => m.display_name).join(", ")}
+          </p>
+        )}
+      </header>
+
+      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+        {messages.map((m) => {
+          const isMine = m.sender_id === currentUserId;
+          const senderName =
+            m.sender?.display_name ??
+            members.find((mem) => mem.id === m.sender_id)?.display_name ??
+            "Someone";
+          return (
+            <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`max-w-[70%] rounded-lg px-4 py-2 text-sm ${
+                  isMine ? "bg-indigo-600 text-white" : "bg-neutral-800 text-neutral-100"
+                }`}
+              >
+                {!isMine && (
+                  <p className="mb-1 text-xs font-semibold text-neutral-400">{senderName}</p>
+                )}
+                {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                {m.attachments && m.attachments.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {m.attachments.map((a) => (
+                      <AttachmentLink key={a.id} attachment={a} />
+                    ))}
+                  </div>
+                )}
+                <p
+                  className={`mt-1 text-[10px] ${
+                    isMine ? "text-indigo-200" : "text-neutral-500"
+                  }`}
+                >
+                  {formatTime(m.created_at)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        {messages.length === 0 && (
+          <p className="text-sm text-neutral-500">No messages yet. Say hello!</p>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <form onSubmit={handleSend} className="border-t border-neutral-800 px-6 py-4">
+        {files.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {files.map((f, i) => (
+              <span
+                key={i}
+                className="flex items-center gap-1 rounded-md bg-neutral-800 px-2 py-1 text-xs text-neutral-300"
+              >
+                {f.name}
+                <button
+                  type="button"
+                  onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="text-neutral-500 hover:text-neutral-200"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            className="hidden"
+            id="file-upload"
+          />
+          <label
+            htmlFor="file-upload"
+            className="cursor-pointer rounded-md border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-800"
+            title="Attach files"
+          >
+            📎
+          </label>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
+            rows={1}
+            placeholder="Write a message…"
+            className="flex-1 resize-none rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-indigo-500"
+          />
+          <button
+            type="submit"
+            disabled={sending}
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            Send
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
