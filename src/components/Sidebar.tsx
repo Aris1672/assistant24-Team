@@ -7,11 +7,14 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile, ChannelWithMeta } from "@/lib/types";
 import NewChatModal from "./NewChatModal";
 import Toast from "./Toast";
+import LanguageSwitcher from "./LanguageSwitcher";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useLanguage();
   const [channels, setChannels] = useState<ChannelWithMeta[]>([]);
   const [showNewChat, setShowNewChat] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -88,7 +91,7 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
         (payload) => {
           const msg = payload.new as { channel_id: string; sender_id: string; body: string | null };
           if (msg.sender_id !== currentUser.id && msg.channel_id !== activeChannelId) {
-            setToast("New message received");
+            setToast(t("newMessageReceived"));
           }
           loadChannels();
         }
@@ -102,9 +105,9 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   }, [supabase, currentUser.id, activeChannelId]);
 
   function labelFor(c: ChannelWithMeta) {
-    if (!c.is_dm) return c.name ?? "Unnamed channel";
+    if (!c.is_dm) return c.name ?? t("unnamedChannel");
     const other = c.members.find((m) => m.id !== currentUser.id);
-    return other?.display_name ?? "Direct message";
+    return other?.display_name ?? t("directMessage");
   }
 
   async function handleSignOut() {
@@ -117,15 +120,18 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
     <aside className="flex w-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-925 bg-neutral-900 md:w-72">
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-4">
         <div>
-          <p className="text-sm font-semibold text-neutral-100">TeamChat</p>
+          <p className="text-sm font-semibold text-neutral-100">{t("appName")}</p>
           <p className="text-xs text-neutral-500">{currentUser.display_name}</p>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="text-xs text-neutral-500 hover:text-neutral-300"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher compact />
+          <button
+            onClick={handleSignOut}
+            className="text-xs text-neutral-500 hover:text-neutral-300"
+          >
+            {t("signOut")}
+          </button>
+        </div>
       </div>
 
       <div className="px-4 py-3">
@@ -133,7 +139,7 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
           onClick={() => setShowNewChat(true)}
           className="w-full rounded-md bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500"
         >
-          + New message
+          {t("newMessage")}
         </button>
       </div>
 
@@ -160,9 +166,7 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
           </Link>
         ))}
         {channels.length === 0 && (
-          <p className="px-3 py-4 text-sm text-neutral-500">
-            No conversations yet. Start one above.
-          </p>
+          <p className="px-3 py-4 text-sm text-neutral-500">{t("noConversations")}</p>
         )}
       </nav>
 

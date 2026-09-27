@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 export default function NewChatModal({
   currentUserId,
@@ -14,6 +15,7 @@ export default function NewChatModal({
 }) {
   const supabase = createClient();
   const router = useRouter();
+  const { t } = useLanguage();
   const [people, setPeople] = useState<Profile[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [channelName, setChannelName] = useState("");
@@ -38,7 +40,7 @@ export default function NewChatModal({
   async function handleCreate() {
     setError(null);
     if (selected.length === 0) {
-      setError("Pick at least one person.");
+      setError(t("pickAtLeastOnePerson"));
       return;
     }
     setLoading(true);
@@ -50,11 +52,11 @@ export default function NewChatModal({
           body: JSON.stringify({ otherUserId: selected[0] }),
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Failed to create chat");
+        if (!res.ok) throw new Error(json.error ?? t("failedToCreateChat"));
         router.push(`/channel/${json.channelId}`);
       } else {
         if (!channelName.trim()) {
-          setError("Group chats need a name.");
+          setError(t("groupChatsNeedName"));
           setLoading(false);
           return;
         }
@@ -64,13 +66,13 @@ export default function NewChatModal({
           body: JSON.stringify({ name: channelName.trim(), memberIds: selected }),
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Failed to create channel");
+        if (!res.ok) throw new Error(json.error ?? t("failedToCreateChannel"));
         router.push(`/channel/${json.channelId}`);
       }
       router.refresh();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      setError(e instanceof Error ? e.message : t("somethingWentWrong"));
     } finally {
       setLoading(false);
     }
@@ -79,19 +81,19 @@ export default function NewChatModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-semibold">New message</h2>
+        <h2 className="mb-4 text-lg font-semibold">{t("newMessageTitle")}</h2>
 
         <label className="mb-1 block text-sm text-neutral-400">
-          Group name (leave blank for a 1:1 chat)
+          {t("groupNameLabel")}
         </label>
         <input
           value={channelName}
           onChange={(e) => setChannelName(e.target.value)}
-          placeholder="e.g. #marketing"
+          placeholder={t("groupNamePlaceholder")}
           className="mb-4 w-full rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none focus:border-indigo-500"
         />
 
-        <label className="mb-1 block text-sm text-neutral-400">Add people</label>
+        <label className="mb-1 block text-sm text-neutral-400">{t("addPeople")}</label>
         <div className="mb-4 max-h-56 overflow-y-auto rounded-md border border-neutral-800">
           {people.map((p) => (
             <label
@@ -109,7 +111,7 @@ export default function NewChatModal({
           ))}
           {people.length === 0 && (
             <p className="px-3 py-4 text-sm text-neutral-500">
-              No other teammates yet.
+              {t("noOtherTeammates")}
             </p>
           )}
         </div>
@@ -121,14 +123,14 @@ export default function NewChatModal({
             onClick={onClose}
             className="rounded-md px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200"
           >
-            Cancel
+            {t("cancel")}
           </button>
           <button
             onClick={handleCreate}
             disabled={loading}
             className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
           >
-            {loading ? "Creating…" : "Start chat"}
+            {loading ? t("creating") : t("startChat")}
           </button>
         </div>
       </div>

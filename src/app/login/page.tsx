@@ -4,10 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,12 +33,15 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4">
       <div className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-8 shadow-lg">
-        <h1 className="mb-6 text-xl font-semibold text-neutral-100">
-          Sign in to TeamChat
-        </h1>
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-neutral-100">
+            {t("signInTitle")}
+          </h1>
+          <LanguageSwitcher compact />
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm text-neutral-400">Email</label>
+            <label className="mb-1 block text-sm text-neutral-400">{t("email")}</label>
             <input
               type="email"
               required
@@ -45,7 +51,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-neutral-400">Password</label>
+            <label className="mb-1 block text-sm text-neutral-400">{t("password")}</label>
             <input
               type="password"
               required
@@ -60,13 +66,13 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-md bg-indigo-600 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? t("signingIn") : t("signIn")}
           </button>
         </form>
         <p className="mt-4 text-sm text-neutral-500">
-          No account?{" "}
+          {t("noAccount")}{" "}
           <Link href="/signup" className="text-indigo-400 hover:underline">
-            Create one
+            {t("createOne")}
           </Link>
         </p>
       </div>

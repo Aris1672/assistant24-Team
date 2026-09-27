@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Channel, Message, Profile, Attachment } from "@/lib/types";
 import AttachmentLink from "./AttachmentLink";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -27,6 +28,7 @@ export default function ChatView({
   currentUserId: string;
 }) {
   const supabase = createClient();
+  const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -35,7 +37,7 @@ export default function ChatView({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const title = channel.is_dm
-    ? members.find((m) => m.id !== currentUserId)?.display_name ?? "Direct message"
+    ? members.find((m) => m.id !== currentUserId)?.display_name ?? t("directMessage")
     : `# ${channel.name}`;
 
   useEffect(() => {
@@ -168,7 +170,7 @@ export default function ChatView({
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       console.error(err);
-      alert("Failed to send message. Please try again.");
+      alert(t("failedToSend"));
     } finally {
       setSending(false);
     }
@@ -180,7 +182,7 @@ export default function ChatView({
         <Link
           href="/"
           className="-ml-1 rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 md:hidden"
-          aria-label="Back to conversations"
+          aria-label={t("backToConversations")}
         >
           ←
         </Link>
@@ -200,7 +202,7 @@ export default function ChatView({
           const senderName =
             m.sender?.display_name ??
             members.find((mem) => mem.id === m.sender_id)?.display_name ??
-            "Someone";
+            t("someone");
           return (
             <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
               <div
@@ -231,7 +233,7 @@ export default function ChatView({
           );
         })}
         {messages.length === 0 && (
-          <p className="text-sm text-neutral-500">No messages yet. Say hello!</p>
+          <p className="text-sm text-neutral-500">{t("noMessagesYet")}</p>
         )}
         <div ref={bottomRef} />
       </div>
@@ -268,7 +270,7 @@ export default function ChatView({
           <label
             htmlFor="file-upload"
             className="cursor-pointer rounded-md border border-neutral-700 px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-800"
-            title="Attach files"
+            title={t("attachFiles")}
           >
             📎
           </label>
@@ -282,7 +284,7 @@ export default function ChatView({
               }
             }}
             rows={1}
-            placeholder="Write a message…"
+            placeholder={t("writeMessage")}
             className="flex-1 resize-none rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-indigo-500"
           />
           <button
@@ -290,7 +292,7 @@ export default function ChatView({
             disabled={sending}
             className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
           >
-            Send
+            {t("send")}
           </button>
         </div>
       </form>
