@@ -112,3 +112,4 @@ powered by Supabase Realtime. Browser push / email notifications aren't
 wired up yet — if you want those later, the natural extension point is a
 Postgres trigger or Edge Function on `messages` insert that calls a push
 provider (e.g. Web Push, or Supabase's upcoming push integration).
+.
