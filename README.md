@@ -1,13 +1,15 @@
 # TeamChat
 
 A team messaging + file-sharing web app: direct messages, group channels, file
-attachments, and live in-app notifications for new messages. Built with
-Next.js (App Router) and self-hosted Supabase (Postgres + Auth + Storage +
-Realtime), deployed on self-hosted Coolify.
+attachments, live in-app notifications, a mobile-responsive layout, and a
+language switcher (English/Russian). Built with Next.js (App Router) and
+self-hosted Supabase (Postgres + Auth + Storage + Realtime), deployed on
+self-hosted Coolify.
 
 **Status: live in production** at https://team.assistant24info.ru — sign-up,
-sign-in, messaging, and file sharing all verified working end-to-end in a
-real browser as of 2026-09-27.
+sign-in, messaging, file sharing, mobile layout, dark theme, and the
+language switcher all verified working end-to-end in a real browser as of
+2026-09-27.
 
 ---
 
@@ -160,6 +162,51 @@ created it), pointed at
 confirmed correctly configured and working — auto-deploy fires on every
 push to `main` once pushes actually land (see #5).
 
+### 7. Mobile layout is a single-panel "app shell", not a squeezed sidebar
+
+Below the `md` Tailwind breakpoint, `AppShell.tsx` shows either the
+conversation list (`Sidebar.tsx`) or the open chat (`ChatView.tsx`), never
+both side-by-side — driven by `usePathname()` checking for `/channel/*`.
+`ChatView.tsx`'s header has a back arrow (`← ` link to `/`, hidden at `md`
+and above) to return to the conversation list. At `md` and above both
+panels show side-by-side as before. If a new top-level authenticated view
+is ever added, it needs the same `isChannelOpen`-style pattern or it will
+render squeezed on phones.
+
+### 8. Mobile browsers can override an intentionally dark theme
+
+A phone screenshot showed a white background instead of the app's dark
+theme, even though every element had a dark Tailwind class. Root cause:
+some mobile browsers apply their own forced dark/light-mode heuristics to
+pages that don't explicitly declare their color scheme, and can override
+*inherited* (not explicitly per-element) background colors on generic
+container `div`s.
+
+**Fix implemented:** `src/app/layout.tsx` exports `viewport = { colorScheme:
+"dark", themeColor: "#0a0a0a" }`, and `bg-neutral-950` is set explicitly (not
+just inherited) on `<html>`, `<body>`, `AppShell.tsx`'s outer wrapper and
+`<main>`, and `ChatView.tsx`'s root container. **If a new top-level
+container is ever added, give it an explicit `bg-neutral-950` too** rather
+than relying on inheritance, to avoid this resurfacing on some devices.
+
+### 9. Language switcher is a lightweight custom context, not a library
+
+The app's text surface is small, so i18n is a hand-rolled
+`LanguageProvider` (`src/lib/i18n/`) rather than a full library like
+`next-intl`. `translations.ts` holds an `en`/`ru` dictionary keyed by
+string constants; `LanguageProvider.tsx` exposes `locale`, `setLocale`, and
+`t(key)` via React context, persists the choice to `localStorage`, and
+falls back to detecting Russian from the browser's language on first visit
+(`navigator.language`). The provider always renders `en` on the very first
+render (both server and client) to avoid a hydration mismatch, then syncs
+to the real preference immediately after mount — so there can be a
+one-frame flash of English before the persisted/detected locale applies.
+**Any new user-visible string must be added to both `en` and `ru` in
+`translations.ts` and read via `useLanguage().t("key")`, or it will render
+in English regardless of the selected language.** The switcher itself
+(`LanguageSwitcher.tsx`) is a plain `<select>` and appears in the sidebar
+header (for signed-in users) and on the login/signup pages.
+
 ---
 
 ## Database schema
@@ -184,6 +231,19 @@ directly on `assistant_vps_3`.
 If the schema ever needs to change, add a new numbered migration file
 (`0002_...sql`) rather than editing `0001_init.sql` in place, and apply it
 the same way.
+
+### Changing a user's password directly (no email flow needed)
+
+Since there's no SMTP/password-reset-email flow configured, an admin can
+reset any user's password directly via Supabase Studio's SQL Editor
+(`pgcrypto`'s `crypt()`/`gen_salt('bf')`, matching how GoTrue hashes
+passwords):
+
+```sql
+update auth.users
+set encrypted_password = crypt('the-new-password', gen_salt('bf'))
+where email = 'person@example.com';
+```
 
 ---
 
@@ -224,25 +284,31 @@ won't reach the browser bundle (see the env var table above).
 ```
 src/
   app/
-    login/, signup/        — auth pages
-    auth/callback/         — email-confirmation redirect handler
-    (app)/                 — authenticated app shell
-      layout.tsx           — loads current user + renders the sidebar
-      page.tsx             — empty state ("select a conversation")
-      channel/[id]/        — a channel or DM thread
-    api/new-dm/            — creates/reuses a 1:1 DM channel
-    api/new-channel/       — creates a group channel
+    layout.tsx              — root layout: dark theme, wraps app in LanguageProvider
+    login/, signup/         — auth pages (localized, include the language switcher)
+    auth/callback/          — email-confirmation redirect handler
+    (app)/                  — authenticated app shell
+      layout.tsx            — loads current user + renders AppShell
+      page.tsx              — empty state ("select a conversation")
+      channel/[id]/         — a channel or DM thread
+    api/new-dm/             — creates/reuses a 1:1 DM channel
+    api/new-channel/        — creates a group channel
   components/
-    Sidebar.tsx            — conversation list, unread badges, new-chat modal
-    ChatView.tsx           — message list, composer, realtime subscription
-    AttachmentLink.tsx     — signed download links for private files
-    NewChatModal.tsx       — pick teammates to start a DM or group
+    AppShell.tsx            — mobile-responsive shell: sidebar OR chat, never both on phones
+    Sidebar.tsx             — conversation list, unread badges, new-chat modal, language switcher
+    ChatView.tsx            — message list, composer (arrow-icon send button), realtime subscription
+    AttachmentLink.tsx      — signed download links for private files
+    NewChatModal.tsx        — pick teammates to start a DM or group
+    LanguageSwitcher.tsx    — EN/RU dropdown, used in Sidebar + login/signup pages
   lib/supabase/
-    client.ts              — browser Supabase client (proxied URL)
+    client.ts               — browser Supabase client (proxied URL)
     server.ts               — server-component Supabase client (direct URL)
     middleware.ts           — session-refresh/auth-redirect Supabase client
     admin.ts                — service_role client (bypasses RLS, server-only)
     cookie-name.ts          — shared AUTH_COOKIE_NAME (see gotcha #3)
+  lib/i18n/
+    translations.ts         — en/ru string dictionary (see gotcha #9)
+    LanguageProvider.tsx    — context provider: locale, setLocale, t()
 supabase/migrations/
   0001_init.sql            — full schema, RLS policies, storage bucket
 Dockerfile                 — multi-stage build, `output: "standalone"`
@@ -270,3 +336,5 @@ note above).
 - Push/email notifications (see above)
 - Avatars (`profiles.avatar_url` column exists, unused)
 - Message search
+- More languages, if needed (add a new key to `translations.ts` and an
+  option in `LanguageSwitcher.tsx`)
