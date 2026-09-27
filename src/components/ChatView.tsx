@@ -290,9 +290,23 @@ export default function ChatView({
           <button
             type="submit"
             disabled={sending}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            aria-label={t("send")}
+            title={t("send")}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
           >
-            {t("send")}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="M12 19V5" />
+              <path d="M5 12l7-7 7 7" />
+            </svg>
           </button>
         </div>
       </form>
