@@ -26,9 +26,9 @@ function initialsFor(name: string) {
 }
 
 const SIZES = {
-  sm: "h-9 w-9 text-sm",
-  md: "h-11 w-11 text-base",
-  lg: "h-24 w-24 text-2xl",
+  sm: "h-11 w-11 text-base",
+  md: "h-14 w-14 text-lg",
+  lg: "h-28 w-28 text-3xl",
 } as const;
 
 export default function Avatar({
