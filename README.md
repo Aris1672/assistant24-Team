@@ -1,15 +1,15 @@
 # TeamChat
 
 A team messaging + file-sharing web app: direct messages, group channels, file
-attachments, live in-app notifications, a mobile-responsive layout, and a
-language switcher (English/Russian). Built with Next.js (App Router) and
-self-hosted Supabase (Postgres + Auth + Storage + Realtime), deployed on
-self-hosted Coolify.
+attachments, avatars, in-app + push notifications, a mobile-responsive layout,
+and a language switcher (English/Russian). Installable as a PWA. Built with
+Next.js (App Router) and self-hosted Supabase (Postgres + Auth + Storage +
+Realtime), deployed on self-hosted Coolify.
 
 **Status: live in production** at https://team.assistant24info.ru — sign-up,
-sign-in, messaging, file sharing, mobile layout, dark theme, and the
-language switcher all verified working end-to-end in a real browser as of
-2026-09-27.
+sign-in, messaging, file sharing, avatar upload, Web Push notifications,
+mobile layout, dark theme, and the language switcher all verified working
+end-to-end in a real browser as of 2026-09-28.
 
 ---
 
@@ -430,7 +430,10 @@ normal desktop browser tab. iOS Safari also supports this, but only once
 the site is added to the Home Screen there — Safari does not allow web push
 from an ordinary browser tab.
 
-**One-time setup, not yet done on Stack 7 — do this before it works:**
+**One-time setup — already done on Stack 7 as of 2026-09-28 (migration
+applied, VAPID env vars set in Coolify, redeployed, and verified working end
+to end). Kept here for reference / if this ever needs to be re-run on a
+fresh stack:**
 
 1. Apply `supabase/migrations/0003_push_subscriptions.sql` (Studio → SQL
    Editor, same as the other migrations).
