@@ -263,6 +263,28 @@ in English regardless of the selected language.** The switcher itself
 (`LanguageSwitcher.tsx`) is a plain `<select>` and appears in the sidebar
 header (for signed-in users) and on the login/signup pages.
 
+### 11. File uploads use a random storage key, never the original file name
+
+`@supabase/storage-js` builds its upload URL by plain string concatenation
+(`_getFinalPath` in its source) — no `encodeURIComponent` anywhere. Combined
+with this app's own `/supabase` proxy rewrite and the self-hosted stack's
+Kong/Envoy hop in front of storage-api, a file name with non-ASCII
+characters (Cyrillic, etc.) or characters like spaces, `#`, `%`, `+`,
+parentheses could silently fail to upload somewhere in that chain, even
+though plain-ASCII names worked fine — confirmed in production with a
+Cyrillic-named PDF that wouldn't attach.
+
+**Fix implemented:** `src/lib/storage.ts`'s `safeStorageKey()` generates a
+random ASCII-only id (+ a sanitized extension, or none if the extension
+itself looks unsafe) used as the actual Storage object key, for both
+message attachments (`ChatView.tsx`) and avatars (`AvatarUpload.tsx`, which
+already used a fixed `avatar.<ext>` key but now sanitizes `<ext>` too). The
+real, human-readable file name is unaffected — it's stored separately in
+`attachments.file_name` / shown from that column, never used as the storage
+key. **Any future code that uploads to Storage should go through
+`safeStorageKey()` rather than using `file.name` directly, or this will
+resurface.**
+
 ---
 
 ## Database schema
@@ -309,6 +331,63 @@ update auth.users
 set encrypted_password = crypt('the-new-password', gen_salt('bf'))
 where email = 'person@example.com';
 ```
+
+### Deleting a user account (no in-app UI for this yet)
+
+There's no self-service "delete my account" button — an admin does it from
+Supabase Studio's SQL Editor. **`profiles` cascades from `auth.users`, but
+`messages.sender_id`, `attachments.uploader_id`, and `channels.created_by`
+do not cascade from `profiles`** — deleting a user who's ever sent a
+message, uploaded a file, or created a channel will fail with a
+foreign-key violation unless those are cleared first. Two options:
+
+- **Disable login, keep their message history for everyone else**
+  (recommended for a team tool — this is the non-destructive option):
+  ```sql
+  update auth.users set banned_until = 'infinity' where email = 'person@example.com';
+  -- optional: stop showing their real name on old messages
+  update public.profiles set display_name = 'Former teammate', avatar_url = null
+    where email = 'person@example.com';
+  ```
+- **Full erasure** (deletes their messages/attachments too — only do this if
+  that's actually wanted, e.g. a GDPR-style request):
+  ```sql
+  do $$
+  declare
+    target_id uuid;
+  begin
+    select id into target_id from auth.users where email = 'person@example.com';
+    if target_id is null then
+      raise notice 'No user found with that email.';
+      return;
+    end if;
+
+    delete from public.attachments where uploader_id = target_id;
+    delete from public.messages where sender_id = target_id;
+    delete from public.channels where created_by = target_id and is_dm = false;
+    -- channels.created_by is nullable — null it instead of deleting DM
+    -- channels, or the other member loses their side of the conversation too.
+    update public.channels set created_by = null where created_by = target_id;
+    -- Cascades: the profiles row and any remaining channel_members rows.
+    delete from auth.users where id = target_id;
+
+    raise notice 'Deleted user %', target_id;
+  end $$;
+  ```
+  This doesn't delete their uploaded files from the `attachments`/`avatars`
+  Storage buckets (orphaned objects, harmless) — remove those manually in
+  Studio → Storage if it matters. It also leaves behind any DM channel
+  where the *other* member never sent a message either — after a full
+  erasure, run this once to clean up any now-empty DM shells:
+  ```sql
+  delete from public.channels
+  where is_dm = true
+  and id in (
+    select channel_id from public.channel_members
+    group by channel_id
+    having count(*) = 1
+  );
+  ```
 
 ---
 
@@ -367,6 +446,7 @@ src/
     LanguageSwitcher.tsx    — EN/RU dropdown, used in Sidebar + login/signup pages
     Avatar.tsx               — round avatar: shows the uploaded photo, or colored initials if none
     AvatarUpload.tsx         — click-to-upload wrapper around Avatar (used in Sidebar's own-profile row)
+    PushNotifications.tsx    — "Enable notifications" banner + subscribe flow (see Push notifications below)
   lib/supabase/
     client.ts               — browser Supabase client (proxied URL)
     server.ts               — server-component Supabase client (direct URL)
@@ -376,6 +456,8 @@ src/
   lib/i18n/
     translations.ts         — en/ru string dictionary (see gotcha #9)
     LanguageProvider.tsx    — context provider: locale, setLocale, t()
+  lib/storage.ts            — safeStorageKey(): ASCII-only Storage object keys (see gotcha #11)
+  lib/push.ts                — Web Push client helpers (VAPID key decoding, feature detection)
 supabase/migrations/
   0001_init.sql            — full schema, RLS policies, attachments storage bucket
   0002_avatars.sql         — public avatars storage bucket + RLS (see Database schema above)
