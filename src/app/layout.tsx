@@ -5,6 +5,16 @@ import { LanguageProvider } from "@/lib/i18n/LanguageProvider";
 export const metadata: Metadata = {
   title: "TeamChat",
   description: "Exchange files and messages with your team",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "TeamChat",
+  },
 };
 
 // Tells the browser this page is intentionally dark, so mobile browsers

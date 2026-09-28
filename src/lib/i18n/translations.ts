@@ -58,6 +58,10 @@ export const translations = {
     avatarUploadFailed: "Failed to upload avatar. Please try again.",
     avatarInvalidType: "Please choose a PNG, JPEG, WebP, or GIF image.",
     avatarTooLarge: "Image is too large (max 5MB).",
+    // Push notifications
+    enableNotifications: "Enable",
+    enabling: "Enabling…",
+    enableNotificationsBody: "Get notified when you receive new messages.",
   },
   ru: {
     appName: "TeamChat",
@@ -114,6 +118,10 @@ export const translations = {
     avatarUploadFailed: "Не удалось загрузить аватар. Попробуйте снова.",
     avatarInvalidType: "Выберите изображение PNG, JPEG, WebP или GIF.",
     avatarTooLarge: "Файл слишком большой (максимум 5МБ).",
+    // Push notifications
+    enableNotifications: "Включить",
+    enabling: "Включение…",
+    enableNotificationsBody: "Получайте уведомления о новых сообщениях.",
   },
 } as const;
 

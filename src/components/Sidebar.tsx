@@ -10,6 +10,7 @@ import Toast from "./Toast";
 import LanguageSwitcher from "./LanguageSwitcher";
 import Avatar from "./Avatar";
 import AvatarUpload from "./AvatarUpload";
+import PushNotifications from "./PushNotifications";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 export default function Sidebar({ currentUser }: { currentUser: Profile }) {
@@ -153,6 +154,8 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
           </button>
         </div>
       </div>
+
+      <PushNotifications />
 
       <div className="px-4 py-3">
         <button

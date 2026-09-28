@@ -24,6 +24,12 @@ ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+# Same story for the Web Push public key: it's not secret (it has to be
+# readable by any browser subscribing to push), but like the vars above it
+# still needs to be a Coolify Build Variable, or the browser bundle will be
+# built without it and push subscribe will silently no-op.
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 # SUPABASE_SERVICE_ROLE_KEY is server-only and never touches the browser
 # bundle, so a placeholder here is fine — the real value is supplied at
 # container runtime via Coolify's normal (non-build) environment variables.

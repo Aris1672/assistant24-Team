@@ -74,6 +74,10 @@ pick up maintenance without re-discovering all of this from scratch.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Stack 7's `ANON_KEY` | Yes (must be) |
 | `SUPABASE_URL` | `http://77.222.47.140:8006` | No (runtime only) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Stack 7's `SERVICE_ROLE_KEY` | No (runtime only — currently also ticked as Buildtime in Coolify, which is harmless but unnecessary; fine to untick) |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | see "Push notifications" below | Yes (must be) |
+| `VAPID_PUBLIC_KEY` | same value as `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | No (runtime only, read by `server.js`) |
+| `VAPID_PRIVATE_KEY` | see "Push notifications" below | No (runtime only, secret) |
+| `VAPID_SUBJECT` | `mailto:eskarpini.sales@gmail.com` (or any contact address) | No (runtime only) |
 
 ---
 
@@ -375,22 +379,25 @@ src/
 supabase/migrations/
   0001_init.sql            — full schema, RLS policies, attachments storage bucket
   0002_avatars.sql         — public avatars storage bucket + RLS (see Database schema above)
-server.js                  — custom Node server: proxies the Realtime WebSocket upgrade (see gotcha #9)
+  0003_push_subscriptions.sql — Web Push subscriptions table + RLS (see Push notifications below)
+public/
+  manifest.webmanifest     — PWA manifest (Add to Home Screen), icon-*.png — see Push notifications
+  sw.js                    — service worker: only handles push/notificationclick, no offline caching
+server.js                  — custom Node server: proxies the Realtime WebSocket upgrade (see gotcha #9),
+                              and separately runs the push-notification sender (see Push notifications)
 Dockerfile                 — multi-stage build; ships full node_modules (no `output: "standalone"`, see gotcha #9)
 next.config.ts             — the /supabase proxy rewrite (REST/Auth/Storage only, not WebSocket upgrades)
 ```
 
 ## Notes on notifications
 
-V1 ships **in-app** notifications: unread badges per conversation and a toast
-when a message arrives for a channel you're not currently viewing, both
-powered by Supabase Realtime. Browser push / email notifications aren't
-wired up yet — if you want those later, the natural extension point is a
-Postgres trigger or Edge Function on `messages` insert that calls a push
-provider (e.g. Web Push, or Supabase's upcoming push integration). Note that
-email delivery specifically would also need real SMTP configured on the
-Supabase stack, which doesn't exist yet (see the `ENABLE_EMAIL_AUTOCONFIRM`
-note above).
+Ships **in-app** notifications (unread badges + a toast for messages in a
+channel you're not currently viewing, via Supabase Realtime) and **Web
+Push** notifications (see below) that arrive even when the app/tab is
+closed, as long as it's been installed/granted at least once. Email
+notifications aren't wired up — that would additionally need real SMTP
+configured on the Supabase stack, which doesn't exist yet (see the
+`ENABLE_EMAIL_AUTOCONFIRM` note above).
 
 ## Avatars
 
@@ -415,13 +422,67 @@ header (top-left, next to the app name). Implementation:
   message bubbles in `ChatView.tsx`.
 - Accepts PNG/JPEG/WebP/GIF, 5MB max, validated client-side before upload.
 
+## Push notifications
+
+Standard Web Push (VAPID), works for the site installed as a PWA on Android
+(the "Add to Home Screen" shortcut the user already had) as well as in a
+normal desktop browser tab. iOS Safari also supports this, but only once
+the site is added to the Home Screen there — Safari does not allow web push
+from an ordinary browser tab.
+
+**One-time setup, not yet done on Stack 7 — do this before it works:**
+
+1. Apply `supabase/migrations/0003_push_subscriptions.sql` (Studio → SQL
+   Editor, same as the other migrations).
+2. Generate a VAPID key pair once (`npx web-push generate-vapid-keys`, or
+   `node -e "console.log(require('web-push').generateVAPIDKeys())"` from the
+   repo, which already has `web-push` installed).
+3. In Coolify, set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (**tick Build Variable**),
+   `VAPID_PUBLIC_KEY` (same value, but do *not* tick Build Variable — it's
+   only read server-side by `server.js`), `VAPID_PRIVATE_KEY` (secret,
+   runtime only), and `VAPID_SUBJECT` (a `mailto:` contact address — some
+   push services reject requests without one). See the env var table above.
+4. Redeploy so the new Build Variable gets inlined into the browser bundle.
+
+**How it works:**
+
+- **Subscribing:** `PushNotifications.tsx` (rendered in the sidebar) shows
+  an "Enable notifications" banner when `Notification.permission` is still
+  `"default"` — permission can only be requested from a real click, so this
+  can't happen silently on load. On click (or automatically on future
+  visits once permission is already `"granted"`) it registers `public/sw.js`,
+  subscribes via `PushManager` using `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, and
+  POSTs the subscription to `/api/push/subscribe`, which upserts it into
+  `push_subscriptions` (RLS-scoped to the signed-in user; unique on
+  `endpoint` so re-subscribing just refreshes the row).
+- **Sending:** unlike everything else in this app, sending can't be
+  triggered by RLS-scoped browser code — it has to run server-side and see
+  every recipient's subscription rows. Rather than add a Postgres trigger
+  (would need the `pg_net` extension) or a separate always-on worker,
+  `server.js` — which is already the one long-lived Node process in this
+  app (see gotcha #9) — opens a *second* Realtime subscription, this time
+  with the service_role key, listening for `INSERT` on `messages`. On each
+  new message it looks up the other channel members, their
+  `push_subscriptions` rows, and calls `web-push`'s `sendNotification()` for
+  each. A `404`/`410` response (subscription expired/revoked) deletes that
+  row so future messages stop retrying it.
+- **Receiving:** `public/sw.js` is a minimal service worker — it only
+  handles the `push` event (shows a notification) and `notificationclick`
+  (focuses an existing tab on that channel, or opens one). It does *not* do
+  offline asset caching, so there's no cache-invalidation complexity to
+  worry about on deploys.
+- Every message currently notifies every other channel member's every
+  registered device — there's no per-channel mute or "only when I'm not
+  viewing it" suppression yet (that would need the server-side sender to
+  know each recipient's currently-open channel, which it doesn't track).
+
 ## Possible next steps (not yet done)
 
 - Message editing/deletion UI (the DB schema and RLS policies already
   support it — `edited_at` column, update/delete policies scoped to the
   sender — just no UI wired up yet)
 - Channel renaming, leaving a channel, removing members
-- Push/email notifications (see above)
+- Per-channel notification mute / "don't notify while viewing" suppression
 - Message search
 - More languages, if needed (add a new key to `translations.ts` and an
   option in `LanguageSwitcher.tsx`)
