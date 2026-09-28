@@ -214,12 +214,12 @@ export default function ChatView({
                 <Avatar name={senderName} avatarUrl={sender?.avatar_url} size="sm" />
               )}
               <div
-                className={`max-w-[70%] rounded-lg px-4 py-2 text-sm ${
+                className={`max-w-[80%] rounded-lg px-4 py-2 text-base md:max-w-[70%] md:text-sm ${
                   isMine ? "bg-indigo-600 text-white" : "bg-neutral-800 text-neutral-100"
                 }`}
               >
                 {!isMine && (
-                  <p className="mb-1 text-xs font-semibold text-neutral-400">{senderName}</p>
+                  <p className="mb-1 text-sm font-semibold text-neutral-400 md:text-xs">{senderName}</p>
                 )}
                 {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                 {m.attachments && m.attachments.length > 0 && (
@@ -230,7 +230,7 @@ export default function ChatView({
                   </div>
                 )}
                 <p
-                  className={`mt-1 text-[10px] ${
+                  className={`mt-1 text-xs md:text-[10px] ${
                     isMine ? "text-indigo-200" : "text-neutral-500"
                   }`}
                 >
@@ -293,7 +293,7 @@ export default function ChatView({
             }}
             rows={1}
             placeholder={t("writeMessage")}
-            className="flex-1 resize-none rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 outline-none focus:border-indigo-500"
+            className="flex-1 resize-none rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-base text-neutral-100 outline-none focus:border-indigo-500 md:text-sm"
           />
           <button
             type="submit"
