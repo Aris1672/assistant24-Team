@@ -8,6 +8,8 @@ import type { Profile, ChannelWithMeta } from "@/lib/types";
 import NewChatModal from "./NewChatModal";
 import Toast from "./Toast";
 import LanguageSwitcher from "./LanguageSwitcher";
+import Avatar from "./Avatar";
+import AvatarUpload from "./AvatarUpload";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 export default function Sidebar({ currentUser }: { currentUser: Profile }) {
@@ -18,6 +20,7 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   const [channels, setChannels] = useState<ChannelWithMeta[]>([]);
   const [showNewChat, setShowNewChat] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser.avatar_url);
 
   const activeChannelId = pathname?.startsWith("/channel/")
     ? pathname.split("/")[2]
@@ -110,6 +113,14 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
     return other?.display_name ?? t("directMessage");
   }
 
+  function avatarFor(c: ChannelWithMeta) {
+    if (c.is_dm) {
+      const other = c.members.find((m) => m.id !== currentUser.id);
+      return <Avatar name={other?.display_name ?? "?"} avatarUrl={other?.avatar_url} size="sm" />;
+    }
+    return <Avatar name={c.name ?? "#"} avatarUrl={null} size="sm" />;
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace("/login");
@@ -119,9 +130,18 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   return (
     <aside className="flex w-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-925 bg-neutral-900 md:w-72">
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-4">
-        <div>
-          <p className="text-sm font-semibold text-neutral-100">{t("appName")}</p>
-          <p className="text-xs text-neutral-500">{currentUser.display_name}</p>
+        <div className="flex items-center gap-3">
+          <AvatarUpload
+            userId={currentUser.id}
+            displayName={currentUser.display_name}
+            avatarUrl={avatarUrl}
+            onUploaded={setAvatarUrl}
+            size="sm"
+          />
+          <div>
+            <p className="text-sm font-semibold text-neutral-100">{t("appName")}</p>
+            <p className="text-xs text-neutral-500">{currentUser.display_name}</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <LanguageSwitcher compact />
@@ -154,9 +174,12 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
                 : "text-neutral-400 hover:bg-neutral-800/60 hover:text-neutral-200"
             }`}
           >
-            <span className="truncate">
-              {c.is_dm ? "" : "# "}
-              {labelFor(c)}
+            <span className="flex min-w-0 items-center gap-2">
+              {avatarFor(c)}
+              <span className="truncate">
+                {c.is_dm ? "" : "# "}
+                {labelFor(c)}
+              </span>
             </span>
             {c.unreadCount > 0 && (
               <span className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-500 px-1 text-[11px] font-semibold text-white">

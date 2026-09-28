@@ -61,9 +61,9 @@ pick up maintenance without re-discovering all of this from scratch.
   Anthropic's API, so there's no reason to route through
   `audit.assistant24info.ru`). "Redirect HTTP to HTTPS" is **Enabled**.
 - **Coolify app build pack:** Dockerfile (explicit) — this repo is a real
-  Next.js app with its own `next start` entry point (not a Vercel-serverless
-  `api/*.js` shape), so it needed only a standard Dockerfile, no
-  `server.js` shim.
+  Next.js app, not a Vercel-serverless `api/*.js` shape. It now runs via a
+  custom `server.js` instead of plain `next start`/`npm start`, needed for
+  the Realtime WebSocket proxy — see gotcha #9 below.
 - **Internal port:** `3000`
 
 ### Environment variables (set in Coolify, Production + Preview)
@@ -276,12 +276,21 @@ header (for signed-in users) and on the login/signup pages.
 - `messages`, `attachments`, `channel_members` added to the
   `supabase_realtime` publication for live updates
 
-To re-apply or inspect: Supabase Studio (`http://77.222.47.140:8006`) → SQL
-Editor, or `psql`/`docker exec teamchat-supabase-db psql -U postgres -d postgres`
+`supabase/migrations/0002_avatars.sql` — **not yet applied to Stack 7, run
+it before deploying the avatar-upload feature.** Adds a public `avatars`
+Storage bucket (`public = true`, unlike `attachments` — avatars are small
+and non-sensitive, so a plain `getPublicUrl()` is used instead of signed
+URLs) with RLS scoping uploads/updates/deletes to `${user_id}/*` via the
+object-path convention. `profiles.avatar_url` already existed in
+`0001_init.sql` and is just populated once a user uploads a photo.
+
+To apply or inspect either migration: Supabase Studio
+(`http://77.222.47.140:8006`) → SQL Editor, or
+`psql`/`docker exec teamchat-supabase-db psql -U postgres -d postgres`
 directly on `assistant_vps_3`.
 
 If the schema ever needs to change, add a new numbered migration file
-(`0002_...sql`) rather than editing `0001_init.sql` in place, and apply it
+(`0003_...sql`) rather than editing an existing one in place, and apply it
 the same way.
 
 ### Changing a user's password directly (no email flow needed)
@@ -352,6 +361,8 @@ src/
     AttachmentLink.tsx      — signed download links for private files
     NewChatModal.tsx        — pick teammates to start a DM or group
     LanguageSwitcher.tsx    — EN/RU dropdown, used in Sidebar + login/signup pages
+    Avatar.tsx               — round avatar: shows the uploaded photo, or colored initials if none
+    AvatarUpload.tsx         — click-to-upload wrapper around Avatar (used in Sidebar's own-profile row)
   lib/supabase/
     client.ts               — browser Supabase client (proxied URL)
     server.ts               — server-component Supabase client (direct URL)
@@ -362,9 +373,11 @@ src/
     translations.ts         — en/ru string dictionary (see gotcha #9)
     LanguageProvider.tsx    — context provider: locale, setLocale, t()
 supabase/migrations/
-  0001_init.sql            — full schema, RLS policies, storage bucket
-Dockerfile                 — multi-stage build, `output: "standalone"`
-next.config.ts             — standalone output + the /supabase proxy rewrite
+  0001_init.sql            — full schema, RLS policies, attachments storage bucket
+  0002_avatars.sql         — public avatars storage bucket + RLS (see Database schema above)
+server.js                  — custom Node server: proxies the Realtime WebSocket upgrade (see gotcha #9)
+Dockerfile                 — multi-stage build; ships full node_modules (no `output: "standalone"`, see gotcha #9)
+next.config.ts             — the /supabase proxy rewrite (REST/Auth/Storage only, not WebSocket upgrades)
 ```
 
 ## Notes on notifications
@@ -379,6 +392,29 @@ email delivery specifically would also need real SMTP configured on the
 Supabase stack, which doesn't exist yet (see the `ENABLE_EMAIL_AUTOCONFIRM`
 note above).
 
+## Avatars
+
+Users can set a profile photo by clicking their own avatar in the sidebar
+header (top-left, next to the app name). Implementation:
+
+- **Storage:** a public `avatars` Storage bucket (`supabase/migrations/0002_avatars.sql`,
+  **must be applied to Stack 7 before this ships** — see Database schema
+  above). Files are stored at `${user_id}/avatar.${ext}` and uploaded with
+  `upsert: true`, so re-uploading overwrites the previous photo instead of
+  accumulating orphaned files. RLS restricts insert/update/delete to the
+  path's own `user_id` folder; select is public (avatars need to render for
+  every teammate without minting a signed URL per image).
+- **Client flow:** `AvatarUpload.tsx` uploads the file, calls
+  `getPublicUrl()`, appends a `?v=<timestamp>` cache-busting query param, and
+  writes the result straight to `profiles.avatar_url` — no server route
+  needed, same pattern as the existing attachment upload in `ChatView.tsx`.
+- **Display:** `Avatar.tsx` renders the photo if `avatar_url` is set, else a
+  colored circle with the user's initials (color derived deterministically
+  from their name, so it's stable across sessions). Used in the sidebar
+  header, the conversation list, the new-chat picker, and next to incoming
+  message bubbles in `ChatView.tsx`.
+- Accepts PNG/JPEG/WebP/GIF, 5MB max, validated client-side before upload.
+
 ## Possible next steps (not yet done)
 
 - Message editing/deletion UI (the DB schema and RLS policies already
@@ -386,7 +422,6 @@ note above).
   sender — just no UI wired up yet)
 - Channel renaming, leaving a channel, removing members
 - Push/email notifications (see above)
-- Avatars (`profiles.avatar_url` column exists, unused)
 - Message search
 - More languages, if needed (add a new key to `translations.ts` and an
   option in `LanguageSwitcher.tsx`)

@@ -52,6 +52,12 @@ export const translations = {
     language: "Language",
     english: "English",
     russian: "Russian",
+    // Avatars
+    changeAvatar: "Change photo",
+    uploading: "Uploading…",
+    avatarUploadFailed: "Failed to upload avatar. Please try again.",
+    avatarInvalidType: "Please choose a PNG, JPEG, WebP, or GIF image.",
+    avatarTooLarge: "Image is too large (max 5MB).",
   },
   ru: {
     appName: "TeamChat",
@@ -102,6 +108,12 @@ export const translations = {
     language: "Язык",
     english: "English",
     russian: "Русский",
+    // Avatars
+    changeAvatar: "Изменить фото",
+    uploading: "Загрузка…",
+    avatarUploadFailed: "Не удалось загрузить аватар. Попробуйте снова.",
+    avatarInvalidType: "Выберите изображение PNG, JPEG, WebP или GIF.",
+    avatarTooLarge: "Файл слишком большой (максимум 5МБ).",
   },
 } as const;
 

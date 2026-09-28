@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
+import Avatar from "./Avatar";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 export default function NewChatModal({
@@ -105,6 +106,7 @@ export default function NewChatModal({
                 checked={selected.includes(p.id)}
                 onChange={() => toggle(p.id)}
               />
+              <Avatar name={p.display_name} avatarUrl={p.avatar_url} size="sm" />
               <span className="text-sm">{p.display_name}</span>
               <span className="ml-auto text-xs text-neutral-500">{p.email}</span>
             </label>

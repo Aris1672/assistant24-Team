@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Channel, Message, Profile, Attachment } from "@/lib/types";
 import AttachmentLink from "./AttachmentLink";
+import Avatar from "./Avatar";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 function formatTime(iso: string) {
@@ -36,9 +37,10 @@ export default function ChatView({
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const title = channel.is_dm
-    ? members.find((m) => m.id !== currentUserId)?.display_name ?? t("directMessage")
-    : `# ${channel.name}`;
+  const otherMember = channel.is_dm
+    ? members.find((m) => m.id !== currentUserId)
+    : undefined;
+  const title = channel.is_dm ? otherMember?.display_name ?? t("directMessage") : `# ${channel.name}`;
 
   useEffect(() => {
     setMessages(initialMessages);
@@ -186,6 +188,7 @@ export default function ChatView({
         >
           ←
         </Link>
+        {channel.is_dm && <Avatar name={title} avatarUrl={otherMember?.avatar_url} size="sm" />}
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold text-neutral-100">{title}</h1>
           {!channel.is_dm && (
@@ -199,12 +202,17 @@ export default function ChatView({
       <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
         {messages.map((m) => {
           const isMine = m.sender_id === currentUserId;
-          const senderName =
-            m.sender?.display_name ??
-            members.find((mem) => mem.id === m.sender_id)?.display_name ??
-            t("someone");
+          const sender =
+            m.sender ?? members.find((mem) => mem.id === m.sender_id);
+          const senderName = sender?.display_name ?? t("someone");
           return (
-            <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+            <div
+              key={m.id}
+              className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}
+            >
+              {!isMine && (
+                <Avatar name={senderName} avatarUrl={sender?.avatar_url} size="sm" />
+              )}
               <div
                 className={`max-w-[70%] rounded-lg px-4 py-2 text-sm ${
                   isMine ? "bg-indigo-600 text-white" : "bg-neutral-800 text-neutral-100"
