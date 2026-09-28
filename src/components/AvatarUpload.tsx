@@ -41,7 +41,12 @@ export default function AvatarUpload({
 
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const rawExt = file.name.split(".").pop()?.toLowerCase() || "";
+      // Only ever use a plain ASCII extension here — avatars are validated
+      // to a known MIME allowlist above, but this keeps the storage key
+      // itself immune to the same non-ASCII-filename issue as message
+      // attachments (see safeStorageKey in lib/storage.ts).
+      const ext = /^[a-z0-9]{1,8}$/.test(rawExt) ? rawExt : "jpg";
       // Fixed filename per user so re-uploads overwrite the old avatar
       // instead of accumulating orphaned files in the bucket.
       const path = `${userId}/avatar.${ext}`;

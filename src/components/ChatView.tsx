@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Channel, Message, Profile, Attachment } from "@/lib/types";
+import { safeStorageKey } from "@/lib/storage";
 import AttachmentLink from "./AttachmentLink";
 import Avatar from "./Avatar";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -137,7 +138,7 @@ export default function ChatView({
       );
 
       for (const file of files) {
-        const path = `${channel.id}/${inserted.id}/${file.name}`;
+        const path = `${channel.id}/${inserted.id}/${safeStorageKey(file.name)}`;
         const { error: uploadError } = await supabase.storage
           .from("attachments")
           .upload(path, file, { upsert: false });
