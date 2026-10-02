@@ -7,9 +7,10 @@ Next.js (App Router) and self-hosted Supabase (Postgres + Auth + Storage +
 Realtime), deployed on self-hosted Coolify.
 
 **Status: live in production** at https://team.assistant24info.ru — sign-up,
-sign-in, messaging, file sharing, avatar upload, Web Push notifications,
+sign-in, messaging, file sharing (including large multi-megabyte
+attachments — see gotcha #12), avatar upload, Web Push notifications,
 mobile layout, dark theme, and the language switcher all verified working
-end-to-end in a real browser as of 2026-09-28.
+end-to-end in a real browser as of 2026-10-02.
 
 ---
 
@@ -267,11 +268,11 @@ header (for signed-in users) and on the login/signup pages.
 
 `@supabase/storage-js` builds its upload URL by plain string concatenation
 (`_getFinalPath` in its source) — no `encodeURIComponent` anywhere. Combined
-with this app's own `/supabase` proxy rewrite and the self-hosted stack's
-Kong/Envoy hop in front of storage-api, a file name with non-ASCII
-characters (Cyrillic, etc.) or characters like spaces, `#`, `%`, `+`,
-parentheses could silently fail to upload somewhere in that chain, even
-though plain-ASCII names worked fine — confirmed in production with a
+with this app's own `/supabase` proxy and the self-hosted stack's Envoy
+gateway in front of storage-api, a file name with non-ASCII characters
+(Cyrillic, etc.) or characters like spaces, `#`, `%`, `+`, parentheses
+could silently fail to upload somewhere in that chain, even though
+plain-ASCII names worked fine — confirmed in production with a
 Cyrillic-named PDF that wouldn't attach.
 
 **Fix implemented:** `src/lib/storage.ts`'s `safeStorageKey()` generates a
@@ -284,6 +285,49 @@ real, human-readable file name is unaffected — it's stored separately in
 key. **Any future code that uploads to Storage should go through
 `safeStorageKey()` rather than using `file.name` directly, or this will
 resurface.**
+
+### 12. Large file uploads hang forever — it's Next's rewrite proxy, not a size/timeout limit
+
+After #11 was fixed, uploading anything around ~10MB+ (a couple of zip
+files, specifically) still didn't work — but differently: no error, the
+upload request just sat at "pending" in the browser's Network tab
+forever, 0 bytes transferred, never resolving. That symptom (hangs, rather
+than a clean error) ruled out the things that usually explain "big files
+fail": a `413`, a clean timeout response, a file-size-limit rejection.
+Checked and ruled out, in order: `storage-api`'s `FILE_SIZE_LIMIT` (50MB,
+nowhere close), and the self-hosted stack's Envoy gateway (this stack uses
+**Envoy, not Kong**, despite what gotcha #11 used to say — see
+`/etc/envoy/lds.yaml` inside the `teamchat-supabase-envoy` container). The
+`/storage/v1/` route's Envoy timeout was raised from 30s to 300s as a
+precaution (see below) but didn't fix it either — the request wasn't
+timing out, it was never actually reaching Envoy with any real progress.
+
+**Root cause:** Next.js's `rewrites()` mechanism for proxying to an
+external URL (used for ordinary `/supabase/*` HTTP calls — see gotcha #1)
+doesn't stream large request bodies cleanly; it stalls instead of
+forwarding them. Small files/payloads never hit this because they're
+proxied near-instantly either way.
+
+**Fix implemented:** `server.js` (which already ran a proper streaming
+reverse proxy via `http-proxy` for the Realtime WebSocket upgrade — see
+gotcha #9) now intercepts **every** `/supabase/*` HTTP request too, before
+Next's own request handler ever sees it, and proxies it with `http-proxy`
+instead. `next.config.ts`'s `rewrites()` block is accordingly dead code in
+production now — but it's kept and documented as such, because `next dev`
+(local development) doesn't go through `server.js` at all and still needs
+it. The proxy has a 10-minute timeout (generous for a slow large upload,
+but finite — a genuinely dead upstream still eventually frees its socket)
+and a proper error handler that returns a clean `502` instead of leaving
+the browser hanging on a different kind of failure.
+
+**Incidental change also made on the Supabase side, harmless to leave in
+place:** `assistant_vps_3`'s `~/supabase-teamchat/docker/volumes/api/envoy/lds.template.yaml`
+had the `/storage/v1/` route's `timeout` raised from `30s` to `300s`
+(requires `docker compose restart api-gw` — that's the Compose *service*
+name; the container itself is `teamchat-supabase-envoy` — to regenerate
+`lds.yaml` from the template and apply it). This turned out not to be the
+actual fix, but a more generous timeout on that route is still reasonable
+for file uploads and doesn't hurt anything else.
 
 ---
 
@@ -465,10 +509,10 @@ supabase/migrations/
 public/
   manifest.webmanifest     — PWA manifest (Add to Home Screen), icon-*.png — see Push notifications
   sw.js                    — service worker: only handles push/notificationclick, no offline caching
-server.js                  — custom Node server: proxies the Realtime WebSocket upgrade (see gotcha #9),
-                              and separately runs the push-notification sender (see Push notifications)
+server.js                  — custom Node server: proxies ALL /supabase/* HTTP + the Realtime WebSocket
+                              upgrade (see gotchas #9 and #12), and runs the push-notification sender
 Dockerfile                 — multi-stage build; ships full node_modules (no `output: "standalone"`, see gotcha #9)
-next.config.ts             — the /supabase proxy rewrite (REST/Auth/Storage only, not WebSocket upgrades)
+next.config.ts             — the /supabase proxy rewrite; dead code in production, kept for `next dev` (gotcha #12)
 ```
 
 ## Notes on notifications
