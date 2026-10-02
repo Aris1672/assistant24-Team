@@ -20,6 +20,17 @@ import type { NextConfig } from "next";
 // used here (a standalone build's generated server.js can't easily be
 // extended with our own `upgrade` handler) — the Docker image instead
 // ships full node_modules, which is fine for an internal tool.
+//
+// NOTE: in production (`npm start` → `node server.js`), this rewrite rule
+// is actually dead code — server.js now intercepts and proxies *every*
+// /supabase/* HTTP request itself (via http-proxy, a proper streaming
+// proxy), before Next's own request handler ever sees it, because Next's
+// rewrite-to-external-URL mechanism was found to stall on large request
+// bodies rather than forwarding them (confirmed with multi-megabyte file
+// attachment uploads that hung indefinitely instead of erroring). This
+// rule is kept anyway because `npm run dev` (`next dev`) does NOT go
+// through server.js at all — local development relies on this rewrite
+// being here.
 const SUPABASE_UPSTREAM = "http://77.222.47.140:8006";
 
 const nextConfig: NextConfig = {

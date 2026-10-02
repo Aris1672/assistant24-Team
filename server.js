@@ -1,21 +1,28 @@
 // Custom server, used instead of plain `next start`.
 //
-// Why this exists: `next.config.ts`'s `rewrites()` proxies ordinary HTTP
-// calls to the self-hosted Supabase stack, but Next.js's rewrite engine does
-// not forward WebSocket "Upgrade" handshakes. Supabase Realtime is a
-// WebSocket connection, so without this file, the browser's realtime
-// subscription (used for live-updating messages) would either fail outright
-// or silently never receive events — matching the exact symptom of new
-// messages only appearing after a manual page refresh (which re-runs the
-// server-side data fetch, but isn't "live").
+// Why this exists: originally just the WebSocket piece below (Next.js's
+// rewrites() forwards ordinary HTTP calls to the self-hosted Supabase stack
+// fine, but can't forward a WebSocket "Upgrade" handshake, which Realtime
+// needs). It has since taken over *all* /supabase/* HTTP traffic too (see
+// below) because Next's rewrite-to-external-URL mechanism turned out to
+// stall/hang on large request bodies rather than cleanly erroring or timing
+// out — confirmed in production with multi-megabyte file attachment
+// uploads that just sat at "pending" in the browser forever. `http-proxy`
+// (already a dependency, for the WS case) is a proper streaming proxy and
+// doesn't have that problem, so every /supabase/* request — HTTP or
+// WebSocket — now goes through it directly, and next.config.ts's rewrites()
+// for this path is dead code kept only as a documented fallback.
 //
-// This server does two things:
-//   1. Runs the normal Next.js request handler for everything (pages, API
-//      routes, the /supabase/* HTTP rewrite, static assets).
-//   2. Listens for raw HTTP `upgrade` events and, for paths starting with
-//      /supabase/realtime, proxies the WebSocket connection directly to the
-//      Supabase stack (stripping the `/supabase` prefix so Kong/Realtime see
-//      the path they expect, e.g. /realtime/v1/websocket).
+// This server does three things:
+//   1. For any request whose path starts with /supabase/, proxies it
+//      directly to the Supabase stack via http-proxy (stripping the
+//      /supabase prefix), streaming the body both ways instead of letting
+//      Next.js's own rewrite handling anywhere near it.
+//   2. Runs the normal Next.js request handler for everything else (pages,
+//      API routes, static assets).
+//   3. Listens for raw HTTP `upgrade` events and, for paths starting with
+//      /supabase/realtime, proxies the WebSocket connection the same way
+//      (Next's rewrites() never even attempts to forward these).
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
@@ -40,14 +47,35 @@ const proxy = httpProxy.createProxyServer({
   target: SUPABASE_UPSTREAM,
   ws: true,
   changeOrigin: true,
+  // No short ceiling on how long a single proxied request/response may
+  // take — large uploads over a slow hop can legitimately run for a
+  // while — but not literally infinite either, so a truly hung upstream
+  // connection still eventually frees its socket instead of leaking it.
+  proxyTimeout: 10 * 60 * 1000, // 10 minutes
+  timeout: 10 * 60 * 1000,
 });
 
-proxy.on("error", (err) => {
-  console.error("[realtime-proxy] error:", err.message);
+proxy.on("error", (err, req, res) => {
+  console.error("[supabase-proxy] error:", err.message);
+  // Without this, a proxy-level error (upstream unreachable, etc.) on an
+  // ordinary HTTP request leaves the browser's fetch/XHR hanging forever
+  // instead of getting a response — the same "stuck at pending" symptom
+  // this whole rewrite was replaced to fix, just from a different cause.
+  if (res && !res.headersSent && typeof res.writeHead === "function") {
+    res.writeHead(502, { "Content-Type": "text/plain" });
+    res.end("Bad gateway (Supabase proxy)");
+  }
 });
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
+    if (req.url && req.url.startsWith("/supabase/")) {
+      // Strip the same-origin proxy prefix so Supabase's gateway sees the
+      // path it actually expects (e.g. /storage/v1/object/...).
+      req.url = req.url.replace(/^\/supabase/, "");
+      proxy.web(req, res);
+      return;
+    }
     const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl);
   });
