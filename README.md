@@ -569,6 +569,13 @@ on every device and reload; change the seed for a different board. The static
 artwork (chip + traces) is drawn once into an offscreen canvas on resize;
 each frame only blits that and draws the few moving pulses.
 
+Note on sizes: on phones the chat variant is intentionally drawn at half
+size, tucked top-left (`scale = 0.5` in `resize()`), which is the look that
+was approved on a real phone; the list variant and desktop draw at full size.
+The static artwork is blitted 1:1 in device pixels and the moving parts are
+drawn under `setTransform(dpr * scale, …)` — if the canvas transform is ever
+dropped, high-DPR phones render everything quarter-size in the corner.
+
 The same background also sits behind the conversation list on phones
 (`Sidebar.tsx`, below the `md` breakpoint only; on desktop the list is a
 narrow side column and doesn't get it). It uses `variant="list"`: a larger

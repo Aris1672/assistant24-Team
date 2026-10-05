@@ -91,6 +91,10 @@ export default function CircuitBackground({
     let width = 0;
     let height = 0;
     let dpr = 1;
+    // Chat on a phone is deliberately drawn at half size, tucked into the
+    // top-left of the message area (the look that was approved on a real
+    // phone). Everything else draws at full size across the container.
+    let scale = 1;
     let chip = { x: 0, y: 0, size: 0 };
     let traces: Trace[] = [];
     const pulses: Pulse[] = [];
@@ -206,7 +210,7 @@ export default function CircuitBackground({
       if (!b) return;
       base.width = Math.floor(width * dpr);
       base.height = Math.floor(height * dpr);
-      b.setTransform(dpr, 0, 0, dpr, 0, 0);
+      b.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
       b.clearRect(0, 0, width, height);
 
       // Soft aura behind the chip.
@@ -293,6 +297,7 @@ export default function CircuitBackground({
       width = Math.max(1, Math.floor(rect.width));
       height = Math.max(1, Math.floor(rect.height));
       dpr = Math.min(window.devicePixelRatio || 1, 2);
+      scale = variant === "chat" && width < 640 ? 0.5 : 1;
       canvas!.width = Math.floor(width * dpr);
       canvas!.height = Math.floor(height * dpr);
       buildTraces();
@@ -374,8 +379,12 @@ export default function CircuitBackground({
     }
 
     function draw() {
-      ctx!.clearRect(0, 0, width, height);
-      ctx!.drawImage(base, 0, 0, width, height);
+      // Static artwork is already in device pixels: blit 1:1, then draw the
+      // moving parts in layout units.
+      ctx!.setTransform(1, 0, 0, 1, 0, 0);
+      ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
+      ctx!.drawImage(base, 0, 0);
+      ctx!.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
 
       if (chipGlow > 0.02) {
         const g = ctx!.createRadialGradient(chip.x, chip.y, chip.size * 0.2, chip.x, chip.y, chip.size * 1.6);
