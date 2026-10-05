@@ -569,6 +569,13 @@ on every device and reload; change the seed for a different board. The static
 artwork (chip + traces) is drawn once into an offscreen canvas on resize;
 each frame only blits that and draws the few moving pulses.
 
+The same background also sits behind the conversation list on phones
+(`Sidebar.tsx`, below the `md` breakpoint only; on desktop the list is a
+narrow side column and doesn't get it). There it just runs the ambient
+pulses — no message bursts. While a chat is open on a phone the list is
+`display: none`; the component notices its container has no size and pauses
+completely until the list is shown again.
+
 It's built to cost almost nothing on a phone, since the app is used all day
 as an installed PWA:
 

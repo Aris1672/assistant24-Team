@@ -98,6 +98,7 @@ export default function CircuitBackground({
     let running = false;
     let lastFrame = 0;
     let lastActivity = performance.now();
+    let boxless = false; // container currently has no size (display: none)
 
     // ---- layout ---------------------------------------------------------
 
@@ -260,6 +261,15 @@ export default function CircuitBackground({
 
     function resize() {
       const rect = parent!.getBoundingClientRect();
+      // Hidden by CSS (e.g. the conversation list while a chat is open on a
+      // phone): draw nothing and burn nothing until it has a size again.
+      if (rect.width < 2 || rect.height < 2) {
+        boxless = true;
+        stop();
+        return;
+      }
+      const wasBoxless = boxless;
+      boxless = false;
       width = Math.max(1, Math.floor(rect.width));
       height = Math.max(1, Math.floor(rect.height));
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -269,6 +279,7 @@ export default function CircuitBackground({
       drawBase();
       pulses.length = 0; // trace indices changed
       draw();
+      if (wasBoxless) wake();
     }
 
     // ---- geometry helpers ----------------------------------------------
@@ -414,7 +425,7 @@ export default function CircuitBackground({
     }
 
     function start() {
-      if (running || reduceMotion || document.visibilityState === "hidden") return;
+      if (running || reduceMotion || boxless || document.visibilityState === "hidden") return;
       running = true;
       lastFrame = performance.now();
       raf = requestAnimationFrame(tick);

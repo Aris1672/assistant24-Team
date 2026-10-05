@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -11,13 +11,30 @@ import LanguageSwitcher from "./LanguageSwitcher";
 import Avatar from "./Avatar";
 import AvatarUpload from "./AvatarUpload";
 import PushNotifications from "./PushNotifications";
+import CircuitBackground from "./CircuitBackground";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+
+// True below the md breakpoint (phones). The circuit background is only shown
+// there: on a phone the conversation list is a full screen of its own, while
+// on desktop it's a narrow side column next to the chat.
+function useIsPhone() {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia("(max-width: 767px)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(max-width: 767px)").matches,
+    () => false
+  );
+}
 
 export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useLanguage();
+  const isPhone = useIsPhone();
   const [channels, setChannels] = useState<ChannelWithMeta[]>([]);
   const [showNewChat, setShowNewChat] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -129,7 +146,8 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   }
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-925 bg-neutral-900 md:w-72">
+    <aside className="relative isolate flex w-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 md:w-72 md:bg-neutral-900">
+      {isPhone && <CircuitBackground className="-z-10" />}
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-4">
         <div className="flex items-center gap-3">
           <AvatarUpload
