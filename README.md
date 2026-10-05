@@ -491,7 +491,7 @@ src/
     Avatar.tsx               — round avatar: shows the uploaded photo, or colored initials if none
     AvatarUpload.tsx         — click-to-upload wrapper around Avatar (used in Sidebar's own-profile row)
     PushNotifications.tsx    — "Enable notifications" banner + subscribe flow (see Push notifications below)
-    NeuralMesh.tsx           — animated chat-window background (see Neural mesh background below)
+    CircuitBackground.tsx    — animated chat-window background (see Circuit-board background below)
   lib/supabase/
     client.ts               — browser Supabase client (proxied URL)
     server.ts               — server-component Supabase client (direct URL)
@@ -549,33 +549,42 @@ header (top-left, next to the app name). Implementation:
   message bubbles in `ChatView.tsx`.
 - Accepts PNG/JPEG/WebP/GIF, 5MB max, validated client-side before upload.
 
-## Neural mesh background
+## Circuit-board background
 
-The message area of `ChatView.tsx` has a faint animated "neural mesh"
-behind the bubbles (`NeuralMesh.tsx`): ~22–70 indigo nodes (scaled to the
-area; fewer on phones) drifting at 3–9 px/s, joined by thin lines when
-close. Sending a message ripples a soft ring of light in from the right
-edge; receiving one ripples in from the left (`meshRef.current?.pulse(...)`,
-called from `handleSend` and the Realtime INSERT handler). It's a plain
-`<canvas>` — no library.
+The message area of `ChatView.tsx` has an animated "AI chip" circuit board
+behind the bubbles (`CircuitBackground.tsx`): a glowing chip on the left with
+thin circuit traces fanning out (28 on desktop, 13 on phones), each ending in
+a glowing dot. Light pulses run along the traces at random — out from the
+chip, or in from an end dot — and often turn round at the end and come back
+("forth and back"); the end dot flashes when a pulse arrives, the chip when
+one comes home. Sending a message fires a burst of pulses out from the chip;
+receiving one fires a burst in towards it
+(`meshRef.current?.pulse("right" | "left")`, called from `handleSend` and the
+Realtime INSERT handler). It's a plain `<canvas>` — no library.
+
+The artwork is drawn from code, not an image, so each trace is its own path a
+pulse can follow and it stays sharp at any size. The layout comes from a fixed
+random seed (`mulberry32(20261005)` in `buildTraces()`), so it looks the same
+on every device and reload; change the seed for a different board. The static
+artwork (chip + traces) is drawn once into an offscreen canvas on resize;
+each frame only blits that and draws the few moving pulses.
 
 It's built to cost almost nothing on a phone, since the app is used all day
 as an installed PWA:
 
 - **Hidden = stopped.** Drawing stops on `visibilitychange` → hidden (another
   app in front, screen off) and resumes when visible again.
-- **Idle = frozen.** After 25 s with no touch/scroll/key/message it stops
-  drawing and leaves the last frame on screen; any interaction or message
-  wakes it.
-- **~30 fps cap** (the drift is too slow for 60 to look different).
-- **`prefers-reduced-motion`:** one static frame, no drift, no pulses.
+- **Idle = frozen.** After 25 s with no touch/scroll/key/message no new pulses
+  are spawned; once the last one finishes, drawing stops and the final frame
+  stays on screen. Any interaction or message wakes it.
+- **~30 fps cap**, max 9 pulses at once (5 on phones).
+- **`prefers-reduced-motion`:** static artwork only, no pulses.
 
-Tuning knobs are constants at the top of `NeuralMesh.tsx` (`IDLE_MS`,
-`FRAME_MS`, pulse speed/band) plus the node-count/link-distance/alpha values
-in `targetCount()` and `draw()`. If it's ever too visible, lower the line/node
-alpha values there. Note the nodes are drawn at low opacity on the explicit
-`bg-neutral-950` wrapper in `ChatView` — keep an explicit background on any
-new container that holds it (see gotcha #8).
+Tuning knobs: `IDLE_MS`, `FRAME_MS`, `MAX_BOUNCES`, `TAIL_PX` at the top of
+`CircuitBackground.tsx`; trace counts per chip side and segment lengths in
+`buildTraces()`; pulse speed and spawn rate in `spawnAmbient()` / `step()`;
+trace/dot opacity in `drawBase()`. Keep an explicit background
+(`bg-neutral-950`) on the wrapper in `ChatView` (see gotcha #8).
 
 ## Push notifications
 

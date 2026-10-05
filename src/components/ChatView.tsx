@@ -7,7 +7,7 @@ import type { Channel, Message, Profile, Attachment } from "@/lib/types";
 import { safeStorageKey } from "@/lib/storage";
 import AttachmentLink from "./AttachmentLink";
 import Avatar from "./Avatar";
-import NeuralMesh, { type NeuralMeshHandle } from "./NeuralMesh";
+import CircuitBackground, { type CircuitBackgroundHandle } from "./CircuitBackground";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 function formatTime(iso: string) {
@@ -38,7 +38,7 @@ export default function ChatView({
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const meshRef = useRef<NeuralMeshHandle>(null);
+  const meshRef = useRef<CircuitBackgroundHandle>(null);
 
   const otherMember = channel.is_dm
     ? members.find((m) => m.id !== currentUserId)
@@ -205,7 +205,7 @@ export default function ChatView({
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-hidden bg-neutral-950">
-        <NeuralMesh ref={meshRef} />
+        <CircuitBackground ref={meshRef} />
         <div className="relative h-full space-y-4 overflow-y-auto px-6 py-4">
         {messages.map((m) => {
           const isMine = m.sender_id === currentUserId;
