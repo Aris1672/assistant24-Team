@@ -7,6 +7,7 @@ import type { Channel, Message, Profile, Attachment } from "@/lib/types";
 import { safeStorageKey } from "@/lib/storage";
 import AttachmentLink from "./AttachmentLink";
 import Avatar from "./Avatar";
+import NeuralMesh, { type NeuralMeshHandle } from "./NeuralMesh";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 function formatTime(iso: string) {
@@ -37,6 +38,7 @@ export default function ChatView({
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const meshRef = useRef<NeuralMeshHandle>(null);
 
   const otherMember = channel.is_dm
     ? members.find((m) => m.id !== currentUserId)
@@ -76,6 +78,7 @@ export default function ChatView({
           );
 
           if (newMsg.sender_id !== currentUserId) {
+            meshRef.current?.pulse("left");
             await supabase
               .from("channel_members")
               .update({ last_read_at: new Date().toISOString() })
@@ -136,6 +139,7 @@ export default function ChatView({
           ? prev
           : [...prev, { ...inserted, sender: undefined, attachments: [] }]
       );
+      meshRef.current?.pulse("right");
 
       for (const file of files) {
         const path = `${channel.id}/${inserted.id}/${safeStorageKey(file.name)}`;
@@ -200,7 +204,9 @@ export default function ChatView({
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-neutral-950">
+        <NeuralMesh ref={meshRef} />
+        <div className="relative h-full space-y-4 overflow-y-auto px-6 py-4">
         {messages.map((m) => {
           const isMine = m.sender_id === currentUserId;
           const sender =
@@ -245,6 +251,7 @@ export default function ChatView({
           <p className="text-sm text-neutral-500">{t("noMessagesYet")}</p>
         )}
         <div ref={bottomRef} />
+        </div>
       </div>
 
       <form onSubmit={handleSend} className="border-t border-neutral-800 px-6 py-4">
