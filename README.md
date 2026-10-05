@@ -571,7 +571,11 @@ each frame only blits that and draws the few moving pulses.
 
 The same background also sits behind the conversation list on phones
 (`Sidebar.tsx`, below the `md` breakpoint only; on desktop the list is a
-narrow side column and doesn't get it). There it just runs the ambient
+narrow side column and doesn't get it). It uses `variant="list"`: a larger
+chip centred low on the screen with traces fanning out all round (the chat
+uses `variant="chat"`: chip on the left, traces fanning right). The list
+`aside` is forced to the full screen height (`h-dvh`) so the canvas fills the
+screen. There it just runs the ambient
 pulses — no message bursts. While a chat is open on a phone the list is
 `display: none`; the component notices its container has no size and pauses
 completely until the list is shown again.

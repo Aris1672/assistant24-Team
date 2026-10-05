@@ -66,9 +66,12 @@ function mulberry32(seed: number) {
 export default function CircuitBackground({
   ref,
   className = "",
+  variant = "chat",
 }: {
   ref?: Ref<CircuitBackgroundHandle>;
   className?: string;
+  /** "chat": chip on the left, traces fan right. "list": larger chip low and centred, traces fan all round. */
+  variant?: "chat" | "list";
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pulseRef = useRef<((side: "left" | "right") => void) | null>(null);
@@ -103,16 +106,28 @@ export default function CircuitBackground({
     // ---- layout ---------------------------------------------------------
 
     function buildTraces() {
-      const rnd = mulberry32(20261005);
+      const rnd = mulberry32(variant === "list" ? 77 : 20261005);
       const rand = (a: number, b: number) => a + rnd() * (b - a);
       const mobile = width < 640;
-      const size = Math.max(56, Math.min(120, Math.min(width, height) * 0.2));
-      chip = { x: width * (mobile ? 0.22 : 0.17), y: height * 0.5, size };
+      const list = variant === "list";
+      const size = list
+        ? Math.max(84, Math.min(150, width * 0.32))
+        : Math.max(56, Math.min(120, Math.min(width, height) * 0.2));
+      chip = list
+        ? { x: width * 0.5, y: height * 0.64, size }
+        : { x: width * (mobile ? 0.22 : 0.17), y: height * 0.5, size };
       const half = size / 2;
       const margin = 10;
 
       // How many traces leave each side of the chip.
-      const sides: { n: number; heading: number }[] = mobile
+      const sides: { n: number; heading: number }[] = list
+        ? [
+            { n: 4, heading: 0 },
+            { n: 4, heading: -90 },
+            { n: 4, heading: 90 },
+            { n: 4, heading: 180 },
+          ]
+        : mobile
         ? [
             { n: 5, heading: 0 },
             { n: 3, heading: -90 },
@@ -141,7 +156,12 @@ export default function CircuitBackground({
 
           let heading = side.heading;
           // Fan towards the right (or up/down for the few left-side traces).
-          const pref = side.heading === 180 ? 180 + (rnd() < 0.5 ? -45 : 45) : [-45, 0, 45][Math.floor(rnd() * 3)];
+          const wobble = [-45, 0, 45][Math.floor(rnd() * 3)];
+          const pref = list
+            ? side.heading + wobble
+            : side.heading === 180
+              ? 180 + (rnd() < 0.5 ? -45 : 45)
+              : wobble;
           const pts = [{ x, y }];
           const segs = Math.floor(rand(mobile ? 3 : 4, mobile ? 6 : 9));
           for (let s = 0; s < segs; s++) {
@@ -482,7 +502,7 @@ export default function CircuitBackground({
       for (const e of activityEvents) window.removeEventListener(e, wake, { capture: true });
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+  }, [variant]);
 
   return (
     <canvas

@@ -146,8 +146,8 @@ export default function Sidebar({ currentUser }: { currentUser: Profile }) {
   }
 
   return (
-    <aside className="relative isolate flex w-full shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 md:w-72 md:bg-neutral-900">
-      {isPhone && <CircuitBackground className="-z-10" />}
+    <aside className="relative isolate flex h-dvh w-full shrink-0 flex-col md:h-auto border-r border-neutral-800 bg-neutral-950 md:w-72 md:bg-neutral-900">
+      {isPhone && <CircuitBackground variant="list" className="-z-10" />}
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-4">
         <div className="flex items-center gap-3">
           <AvatarUpload
