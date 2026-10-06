@@ -600,7 +600,10 @@ narrow side column and doesn't get it). It uses `variant="list"`: a larger
 chip centred low on the screen with traces fanning out all round (the chat
 uses `variant="chat"`: chip on the left, traces fanning right). The list
 `aside` is forced to the full screen height (`h-dvh`) so the canvas fills the
-screen. There it just runs the ambient
+screen, and has `isolate z-10` so the canvas can sit behind its content —
+the `z-10` matters: the New-message modal and toasts are `fixed` *inside* the
+aside, so without it the start page's positioned background paints over them
+on desktop (dimmed screen, no dialog). There it just runs the ambient
 pulses — no message bursts. While a chat is open on a phone the list is
 `display: none`; the component notices its container has no size and pauses
 completely until the list is shown again.
