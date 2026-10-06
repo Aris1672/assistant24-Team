@@ -605,6 +605,12 @@ pulses — no message bursts. While a chat is open on a phone the list is
 `display: none`; the component notices its container has no size and pauses
 completely until the list is shown again.
 
+The desktop start page ("Select a conversation…", `src/app/(app)/page.tsx`)
+uses `variant="list"` too: on wide screens the chip is centred slightly above
+the middle (45% height) with more traces (26) so the board spans the whole
+pane, and the prompt text sits at the bottom. On phones that page is hidden
+(the list takes its place), so the canvas pauses itself there.
+
 It's built to cost almost nothing on a phone, since the app is used all day
 as an installed PWA:
 

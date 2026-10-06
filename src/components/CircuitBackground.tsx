@@ -115,10 +115,10 @@ export default function CircuitBackground({
       const mobile = width < 640;
       const list = variant === "list";
       const size = list
-        ? Math.max(84, Math.min(150, width * 0.32))
+        ? Math.max(84, Math.min(mobile ? 150 : 170, width * 0.32))
         : Math.max(56, Math.min(120, Math.min(width, height) * 0.2));
       chip = list
-        ? { x: width * 0.5, y: height * 0.64, size }
+        ? { x: width * 0.5, y: height * (mobile ? 0.64 : 0.45), size }
         : { x: width * (mobile ? 0.22 : 0.17), y: height * 0.5, size };
       const half = size / 2;
       const margin = 10;
@@ -126,10 +126,10 @@ export default function CircuitBackground({
       // How many traces leave each side of the chip.
       const sides: { n: number; heading: number }[] = list
         ? [
-            { n: 4, heading: 0 },
-            { n: 4, heading: -90 },
-            { n: 4, heading: 90 },
-            { n: 4, heading: 180 },
+            { n: mobile ? 4 : 7, heading: 0 },
+            { n: mobile ? 4 : 6, heading: -90 },
+            { n: mobile ? 4 : 6, heading: 90 },
+            { n: mobile ? 4 : 7, heading: 180 },
           ]
         : mobile
         ? [
