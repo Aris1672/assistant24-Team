@@ -18,6 +18,9 @@ export const translations = {
     send: "Send",
     attachFiles: "Attach files",
     failedToSend: "Failed to send message. Please try again.",
+    deleteMessage: "Delete message",
+    deleteMessageConfirm: "Delete this message for everyone? This can't be undone.",
+    failedToDelete: "Failed to delete the message. Please try again.",
     someone: "Someone",
     // New chat modal
     newMessageTitle: "New message",
@@ -78,6 +81,9 @@ export const translations = {
     send: "Отправить",
     attachFiles: "Прикрепить файлы",
     failedToSend: "Не удалось отправить сообщение. Попробуйте снова.",
+    deleteMessage: "Удалить сообщение",
+    deleteMessageConfirm: "Удалить это сообщение у всех? Это действие нельзя отменить.",
+    failedToDelete: "Не удалось удалить сообщение. Попробуйте снова.",
     someone: "Кто-то",
     // New chat modal
     newMessageTitle: "Новое сообщение",

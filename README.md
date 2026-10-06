@@ -549,6 +549,24 @@ header (top-left, next to the app name). Implementation:
   message bubbles in `ChatView.tsx`.
 - Accepts PNG/JPEG/WebP/GIF, 5MB max, validated client-side before upload.
 
+## Deleting messages
+
+Every message you sent has a small trash icon in its bubble footer
+(`handleDelete` in `ChatView.tsx`). After a confirmation prompt it deletes the
+message **for everyone**: first the attached files are removed from the
+`attachments` storage bucket, then the `messages` row is deleted (its
+`attachments` rows cascade). The other person's open chat drops the message
+live through a Realtime `DELETE` subscription on `messages`. No new SQL was
+needed — `0001_init.sql` already has the RLS policies for it ("Senders can
+delete their own messages", "Uploaders can delete their own files").
+
+Gotchas: Realtime `DELETE` payloads only carry the primary key and can't be
+filtered by `channel_id`, so every open chat receives every delete and just
+ignores ids it isn't showing. A user can only delete their own messages (RLS
+enforces this, not just the UI). Deleted messages are gone for good — there is
+no soft-delete/undo. Someone who has the chat closed simply won't see the
+message next time they open it.
+
 ## Circuit-board background
 
 The message area of `ChatView.tsx` has an animated "AI chip" circuit board

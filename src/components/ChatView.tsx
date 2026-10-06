@@ -88,6 +88,18 @@ export default function ChatView({
         }
       )
       .on(
+        // Someone (us on another device, or the other person) deleted a
+        // message. DELETE events can't be filtered by channel (only the
+        // primary key is in the payload), so every subscriber gets them —
+        // harmless: we only drop the id if it's one we're showing.
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages" },
+        (payload) => {
+          const id = (payload.old as { id?: string }).id;
+          if (id) setMessages((prev) => prev.filter((m) => m.id !== id));
+        }
+      )
+      .on(
         "postgres_changes",
         {
           event: "INSERT",
@@ -183,6 +195,25 @@ export default function ChatView({
     }
   }
 
+  async function handleDelete(m: Message) {
+    if (!window.confirm(t("deleteMessageConfirm"))) return;
+    try {
+      // Remove the files first, then the message row (its attachment rows
+      // cascade). Realtime then removes the message on the other side too.
+      const paths = (m.attachments ?? []).map((a) => a.storage_path);
+      if (paths.length > 0) {
+        const { error: rmError } = await supabase.storage.from("attachments").remove(paths);
+        if (rmError) throw rmError;
+      }
+      const { error } = await supabase.from("messages").delete().eq("id", m.id);
+      if (error) throw error;
+      setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    } catch (err) {
+      console.error(err);
+      alert(t("failedToDelete"));
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-neutral-950">
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-4 md:px-6">
@@ -236,13 +267,38 @@ export default function ChatView({
                     ))}
                   </div>
                 )}
-                <p
-                  className={`mt-1 text-xs md:text-[10px] ${
-                    isMine ? "text-indigo-200" : "text-neutral-500"
+                <div
+                  className={`mt-1 flex items-center gap-2 text-xs md:text-[10px] ${
+                    isMine ? "justify-between text-indigo-200" : "text-neutral-500"
                   }`}
                 >
-                  {formatTime(m.created_at)}
-                </p>
+                  <span>{formatTime(m.created_at)}</span>
+                  {isMine && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(m)}
+                      aria-label={t("deleteMessage")}
+                      title={t("deleteMessage")}
+                      className="-mr-1 rounded p-1 text-indigo-200/80 hover:bg-indigo-500 hover:text-white"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4 md:h-3.5 md:w-3.5"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
