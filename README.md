@@ -357,8 +357,8 @@ object-path convention. `profiles.avatar_url` already existed in
 `supabase/migrations/0003_push_subscriptions.sql` — applied (see Push
 notifications).
 
-`supabase/migrations/0004_message_replies.sql` — **not yet applied to Stack 7,
-run it before deploying the reply feature.** Adds a nullable
+`supabase/migrations/0004_message_replies.sql` — already applied to Stack 7
+(reply feature verified working in production, 2026-10-08). Adds a nullable
 `messages.reply_to_id uuid` column (deliberately no foreign key — see
 "Replying to messages" below).
 
