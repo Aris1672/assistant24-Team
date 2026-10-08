@@ -1,5 +1,5 @@
 # --- deps ---------------------------------------------------------------
-FROM node:20-slim AS deps
+FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # Using `npm install` rather than `npm ci` here: the committed lockfile can
@@ -10,7 +10,7 @@ COPY package.json package-lock.json ./
 RUN npm install
 
 # --- build ---------------------------------------------------------------
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -44,7 +44,7 @@ RUN npm run build
 # generated server.js can't easily be extended with a custom `upgrade`
 # handler, so the runtime image ships full node_modules instead — fine for
 # an internal tool where a slightly larger image doesn't matter.
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

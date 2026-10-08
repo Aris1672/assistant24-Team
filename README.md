@@ -521,7 +521,7 @@ public/
   sw.js                    — service worker: only handles push/notificationclick, no offline caching
 server.js                  — custom Node server: proxies ALL /supabase/* HTTP + the Realtime WebSocket
                               upgrade (see gotchas #9 and #12), and runs the push-notification sender
-Dockerfile                 — multi-stage build; ships full node_modules (no `output: "standalone"`, see gotcha #9)
+Dockerfile                 — multi-stage build on node:22-slim (Node 20 is deprecated by supabase-js); ships full node_modules (no `output: "standalone"`, see gotcha #9)
 next.config.ts             — the /supabase proxy rewrite; dead code in production, kept for `next dev` (gotcha #12)
 ```
 

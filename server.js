@@ -85,13 +85,16 @@ app.prepare().then(() => {
     // container actually receives, and whether it matched. If NOTHING logs
     // here when testing from a browser, the request is being dropped
     // upstream (Traefik/Coolify) and never reaches this Node process at all.
-    console.log("[realtime-proxy] upgrade request received, url:", req.url);
+    // Log the path only: the query string carries the apikey, which has no
+    // business sitting in log files.
+    const logPath = (req.url || "").split("?")[0];
+    console.log("[realtime-proxy] upgrade request received, path:", logPath);
 
     if (req.url && req.url.startsWith("/supabase/realtime")) {
       // Strip the same-origin proxy prefix so Supabase's Kong gateway sees
       // the path it actually expects (e.g. /realtime/v1/websocket).
       req.url = req.url.replace(/^\/supabase/, "");
-      console.log("[realtime-proxy] proxying to upstream as:", req.url);
+      console.log("[realtime-proxy] proxying to upstream as:", req.url.split("?")[0]);
       proxy.ws(req, socket, head);
     } else {
       console.log("[realtime-proxy] url did not match /supabase/realtime, destroying socket");
