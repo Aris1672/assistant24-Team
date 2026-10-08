@@ -19,6 +19,14 @@ function formatTime(iso: string) {
   });
 }
 
+// One-line text used when quoting a message: its body, or the first file name
+// for a file-only message.
+function previewText(m: Message) {
+  if (m.body) return m.body;
+  const first = m.attachments?.[0];
+  return first ? `📎 ${first.file_name}` : "";
+}
+
 export default function ChatView({
   channel,
   members,
@@ -36,8 +44,11 @@ export default function ChatView({
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const meshRef = useRef<CircuitBackgroundHandle>(null);
 
   const otherMember = channel.is_dm
@@ -48,6 +59,10 @@ export default function ChatView({
   useEffect(() => {
     setMessages(initialMessages);
   }, [initialMessages]);
+
+  // A pending reply belongs to the conversation it was started in; ignore it
+  // if the user has switched to another channel since.
+  const activeReply = replyTo && replyTo.channel_id === channel.id ? replyTo : null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -139,7 +154,14 @@ export default function ChatView({
 
       const { data: inserted, error } = await supabase
         .from("messages")
-        .insert({ channel_id: channel.id, sender_id: user.id, body: body.trim() || null })
+        .insert({
+          channel_id: channel.id,
+          sender_id: user.id,
+          body: body.trim() || null,
+          // Only sent when actually replying, so ordinary messages keep
+          // working even on a database that hasn't run 0004 yet.
+          ...(activeReply ? { reply_to_id: activeReply.id } : {}),
+        })
         .select()
         .single();
 
@@ -186,6 +208,7 @@ export default function ChatView({
 
       setBody("");
       setFiles([]);
+      setReplyTo(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       console.error(err);
@@ -193,6 +216,21 @@ export default function ChatView({
     } finally {
       setSending(false);
     }
+  }
+
+  function startReply(m: Message) {
+    setReplyTo(m);
+    textareaRef.current?.focus();
+  }
+
+  // Scroll to a quoted message and flash it briefly. Safe no-op if it isn't
+  // in the DOM (e.g. it was deleted).
+  function jumpToMessage(id: string) {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightId(id);
+    window.setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1500);
   }
 
   async function handleDelete(m: Message) {
@@ -243,22 +281,67 @@ export default function ChatView({
           const sender =
             m.sender ?? members.find((mem) => mem.id === m.sender_id);
           const senderName = sender?.display_name ?? t("someone");
+          const quoted = m.reply_to_id
+            ? messages.find((x) => x.id === m.reply_to_id)
+            : undefined;
+          const quotedName = quoted
+            ? (quoted.sender ?? members.find((mem) => mem.id === quoted.sender_id))
+                ?.display_name ?? t("someone")
+            : "";
           return (
             <div
               key={m.id}
+              id={`msg-${m.id}`}
               className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}
             >
               {!isMine && (
                 <Avatar name={senderName} avatarUrl={sender?.avatar_url} size="sm" />
               )}
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 text-base md:max-w-[70%] md:text-sm ${
+                className={`max-w-[80%] rounded-lg px-4 py-2 text-base transition-shadow md:max-w-[70%] md:text-sm ${
                   isMine ? "bg-indigo-600 text-white" : "bg-neutral-800 text-neutral-100"
-                }`}
+                } ${highlightId === m.id ? "ring-2 ring-amber-400" : ""}`}
               >
                 {!isMine && (
                   <p className="mb-1 text-sm font-semibold text-neutral-400 md:text-xs">{senderName}</p>
                 )}
+                {m.reply_to_id &&
+                  (quoted ? (
+                    <button
+                      type="button"
+                      onClick={() => jumpToMessage(quoted.id)}
+                      className={`mb-1 block w-full rounded border-l-2 px-2 py-1 text-left ${
+                        isMine
+                          ? "border-indigo-200 bg-indigo-700/60 hover:bg-indigo-700"
+                          : "border-neutral-500 bg-neutral-900/60 hover:bg-neutral-900"
+                      }`}
+                    >
+                      <span
+                        className={`block truncate text-xs font-semibold ${
+                          isMine ? "text-indigo-100" : "text-neutral-300"
+                        }`}
+                      >
+                        {quotedName}
+                      </span>
+                      <span
+                        className={`block truncate text-xs ${
+                          isMine ? "text-indigo-200" : "text-neutral-400"
+                        }`}
+                      >
+                        {previewText(quoted)}
+                      </span>
+                    </button>
+                  ) : (
+                    <p
+                      className={`mb-1 rounded border-l-2 px-2 py-1 text-xs italic ${
+                        isMine
+                          ? "border-indigo-200 bg-indigo-700/60 text-indigo-200"
+                          : "border-neutral-500 bg-neutral-900/60 text-neutral-500"
+                      }`}
+                    >
+                      {t("originalDeleted")}
+                    </p>
+                  ))}
                 {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                 {m.attachments && m.attachments.length > 0 && (
                   <div className="mt-2 space-y-1">
@@ -268,11 +351,37 @@ export default function ChatView({
                   </div>
                 )}
                 <div
-                  className={`mt-1 flex items-center gap-2 text-xs md:text-[10px] ${
-                    isMine ? "justify-between text-indigo-200" : "text-neutral-500"
+                  className={`mt-1 flex items-center justify-between gap-2 text-xs md:text-[10px] ${
+                    isMine ? "text-indigo-200" : "text-neutral-500"
                   }`}
                 >
                   <span>{formatTime(m.created_at)}</span>
+                  <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => startReply(m)}
+                    aria-label={t("reply")}
+                    title={t("reply")}
+                    className={`rounded p-1 ${
+                      isMine
+                        ? "text-indigo-200/80 hover:bg-indigo-500 hover:text-white"
+                        : "text-neutral-500 hover:bg-neutral-700 hover:text-neutral-200"
+                    }`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 md:h-3.5 md:w-3.5"
+                    >
+                      <path d="M9 14L4 9l5-5" />
+                      <path d="M4 9h10a6 6 0 0 1 6 6v3" />
+                    </svg>
+                  </button>
                   {isMine && (
                     <button
                       type="button"
@@ -298,6 +407,7 @@ export default function ChatView({
                       </svg>
                     </button>
                   )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -311,6 +421,27 @@ export default function ChatView({
       </div>
 
       <form onSubmit={handleSend} className="border-t border-neutral-800 px-6 py-4">
+        {activeReply && (
+          <div className="mb-2 flex items-center gap-2 rounded-md border-l-2 border-indigo-400 bg-neutral-800 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-indigo-300">
+                {t("replyingTo")}{" "}
+                {(activeReply.sender ?? members.find((mem) => mem.id === activeReply.sender_id))
+                  ?.display_name ?? t("someone")}
+              </p>
+              <p className="truncate text-xs text-neutral-400">{previewText(activeReply)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              aria-label={t("cancelReply")}
+              title={t("cancelReply")}
+              className="rounded p-1 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-200"
+            >
+              ×
+            </button>
+          </div>
+        )}
         {files.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
             {files.map((f, i) => (
@@ -347,6 +478,7 @@ export default function ChatView({
             📎
           </label>
           <textarea
+            ref={textareaRef}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {

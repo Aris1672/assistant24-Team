@@ -354,7 +354,15 @@ URLs) with RLS scoping uploads/updates/deletes to `${user_id}/*` via the
 object-path convention. `profiles.avatar_url` already existed in
 `0001_init.sql` and is just populated once a user uploads a photo.
 
-To apply or inspect either migration: Supabase Studio
+`supabase/migrations/0003_push_subscriptions.sql` — applied (see Push
+notifications).
+
+`supabase/migrations/0004_message_replies.sql` — **not yet applied to Stack 7,
+run it before deploying the reply feature.** Adds a nullable
+`messages.reply_to_id uuid` column (deliberately no foreign key — see
+"Replying to messages" below).
+
+To apply or inspect any migration: Supabase Studio
 (`http://77.222.47.140:8006`) → SQL Editor, or
 `psql`/`docker exec teamchat-supabase-db psql -U postgres -d postgres`
 directly on `assistant_vps_3`.
@@ -507,6 +515,7 @@ supabase/migrations/
   0001_init.sql            — full schema, RLS policies, attachments storage bucket
   0002_avatars.sql         — public avatars storage bucket + RLS (see Database schema above)
   0003_push_subscriptions.sql — Web Push subscriptions table + RLS (see Push notifications below)
+  0004_message_replies.sql — messages.reply_to_id column (see Replying to messages below)
 public/
   manifest.webmanifest     — PWA manifest (Add to Home Screen), icon-*.png — see Push notifications
   sw.js                    — service worker: only handles push/notificationclick, no offline caching
@@ -565,6 +574,36 @@ ignores ids it isn't showing. A user can only delete their own messages (RLS
 enforces this, not just the UI). Deleted messages are gone for good — there is
 no soft-delete/undo. Someone who has the chat closed simply won't see the
 message next time they open it.
+
+## Replying to messages
+
+Every message bubble has a small reply arrow in its footer (next to the trash
+icon on your own messages). Clicking it puts a "Replying to <name>" bar above
+the composer with a one-line preview of the original (its text, or `📎 file
+name` for a file-only message) and an × to cancel. The message you then send
+stores the original's id in `messages.reply_to_id` and renders a quoted block
+(sender + one-line preview) at the top of its bubble. Clicking the quote
+scrolls to the original and flashes it with an amber ring for ~1.5 s
+(`jumpToMessage` in `ChatView.tsx`).
+
+Design notes:
+
+- **`reply_to_id` has no foreign key on purpose** (`0004_message_replies.sql`).
+  With `on delete set null` a reply would silently lose its quote when the
+  original is deleted, and only after a reload. As a plain column the pointer
+  survives, and the quote shows an italic "Message deleted" both live and
+  after reload. The UI only looks the id up among the messages already loaded
+  for the same channel (the channel page loads the whole history, no
+  pagination), so a stale id is harmless.
+- **No RLS or server changes.** The existing insert/select policies already
+  cover the column, and `reply_to_id` arrives in Realtime INSERT events
+  automatically. Push notifications are unchanged (they still show just the
+  new message text).
+- A pending reply is tied to its channel: switching channels ignores it
+  (`activeReply`). New strings: `reply`, `replyingTo`, `cancelReply`,
+  `originalDeleted` (EN + RU).
+- Not done: swipe-to-reply on phones, Esc to cancel, and replying shows no
+  quote in the sidebar's last-message line.
 
 ## Circuit-board background
 

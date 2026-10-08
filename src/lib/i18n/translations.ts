@@ -22,6 +22,11 @@ export const translations = {
     deleteMessageConfirm: "Delete this message for everyone? This can't be undone.",
     failedToDelete: "Failed to delete the message. Please try again.",
     someone: "Someone",
+    // Replies
+    reply: "Reply",
+    replyingTo: "Replying to",
+    cancelReply: "Cancel reply",
+    originalDeleted: "Message deleted",
     // New chat modal
     newMessageTitle: "New message",
     groupNameLabel: "Group name (leave blank for a 1:1 chat)",
@@ -85,6 +90,11 @@ export const translations = {
     deleteMessageConfirm: "Удалить это сообщение у всех? Это действие нельзя отменить.",
     failedToDelete: "Не удалось удалить сообщение. Попробуйте снова.",
     someone: "Кто-то",
+    // Replies
+    reply: "Ответить",
+    replyingTo: "Ответ для",
+    cancelReply: "Отменить ответ",
+    originalDeleted: "Сообщение удалено",
     // New chat modal
     newMessageTitle: "Новое сообщение",
     groupNameLabel: "Название группы (оставьте пустым для личного чата)",
