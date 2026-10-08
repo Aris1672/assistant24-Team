@@ -8,9 +8,9 @@ Realtime), deployed on self-hosted Coolify.
 
 **Status: live in production** at https://team.assistant24info.ru — sign-up,
 sign-in, messaging, file sharing (including large multi-megabyte
-attachments — see gotcha #12), avatar upload, Web Push notifications,
-mobile layout, dark theme, and the language switcher all verified working
-end-to-end in a real browser as of 2026-10-02.
+attachments — see gotcha #12), avatar upload, message deletion, Web Push
+notifications, mobile layout, dark theme, and the language switcher all
+verified working end-to-end in a real browser as of 2026-10-08.
 
 ---
 
@@ -346,8 +346,8 @@ for file uploads and doesn't hurt anything else.
 - `messages`, `attachments`, `channel_members` added to the
   `supabase_realtime` publication for live updates
 
-`supabase/migrations/0002_avatars.sql` — **not yet applied to Stack 7, run
-it before deploying the avatar-upload feature.** Adds a public `avatars`
+`supabase/migrations/0002_avatars.sql` — already applied to Stack 7 (avatar
+upload verified working in production). Adds a public `avatars`
 Storage bucket (`public = true`, unlike `attachments` — avatars are small
 and non-sensitive, so a plain `getPublicUrl()` is used instead of signed
 URLs) with RLS scoping uploads/updates/deletes to `${user_id}/*` via the
@@ -532,8 +532,7 @@ Users can set a profile photo by clicking their own avatar in the sidebar
 header (top-left, next to the app name). Implementation:
 
 - **Storage:** a public `avatars` Storage bucket (`supabase/migrations/0002_avatars.sql`,
-  **must be applied to Stack 7 before this ships** — see Database schema
-  above). Files are stored at `${user_id}/avatar.${ext}` and uploaded with
+  already applied to Stack 7 — see Database schema above). Files are stored at `${user_id}/avatar.${ext}` and uploaded with
   `upsert: true`, so re-uploading overwrites the previous photo instead of
   accumulating orphaned files. RLS restricts insert/update/delete to the
   path's own `user_id` folder; select is public (avatars need to render for
@@ -690,9 +689,9 @@ fresh stack:**
 
 ## Possible next steps (not yet done)
 
-- Message editing/deletion UI (the DB schema and RLS policies already
-  support it — `edited_at` column, update/delete policies scoped to the
-  sender — just no UI wired up yet)
+- Message editing UI (the DB schema and RLS policies already support it —
+  `edited_at` column, update policy scoped to the sender — just no UI wired
+  up yet; deletion is already shipped, see "Deleting messages")
 - Channel renaming, leaving a channel, removing members
 - Per-channel notification mute / "don't notify while viewing" suppression
 - Message search
