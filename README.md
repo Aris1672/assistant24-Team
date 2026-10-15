@@ -1,16 +1,23 @@
 # TeamChat
 
 A team messaging + file-sharing web app: direct messages, group channels, file
-attachments, avatars, in-app + push notifications, a mobile-responsive layout,
-and a language switcher (English/Russian). Installable as a PWA. Built with
+attachments with in-chat image previews, replies to specific messages, message
+deletion, avatars, in-app + push notifications, a mobile-responsive layout, and
+a language switcher (English/Russian). Installable as a PWA. Built with
 Next.js (App Router) and self-hosted Supabase (Postgres + Auth + Storage +
 Realtime), deployed on self-hosted Coolify.
 
 **Status: live in production** at https://team.assistant24info.ru — sign-up,
 sign-in, messaging, file sharing (including large multi-megabyte
-attachments — see gotcha #12), avatar upload, message deletion, Web Push
-notifications, mobile layout, dark theme, and the language switcher all
-verified working end-to-end in a real browser as of 2026-10-08.
+attachments — see gotcha #12), avatar upload, message deletion, message
+replies, Web Push notifications, mobile layout, dark theme, and the language
+switcher all verified working end-to-end in a real browser as of 2026-10-08.
+
+Shipped 2026-10-15: in-chat image previews and a full-screen viewer with swipe
+between a message's pictures (see "Image previews"). Previews were checked in
+the live app; the swipe gestures were only verified with a Chromium
+touch-emulation harness, not yet on a real phone. The Docker image is on Node 22
+(gotcha #13).
 
 ---
 
@@ -329,6 +336,29 @@ name; the container itself is `teamchat-supabase-envoy` — to regenerate
 actual fix, but a more generous timeout on that route is still reasonable
 for file uploads and doesn't hurt anything else.
 
+### 13. Runtime log lines that are normal (and what not to log)
+
+What a healthy container prints in Coolify's runtime logs:
+
+- `[push] realtime subscription status: SUBSCRIBED` — the push sender is
+  connected to Realtime.
+- `[realtime-proxy] upgrade request received … / proxying to upstream … /
+  upstream websocket connection opened`, later `websocket connection closed` —
+  one set per browser tab opening/closing its Realtime socket.
+- `[DEP0060] DeprecationWarning: util._extend` — printed once at startup by the
+  unmaintained `http-proxy` package on Node 22. Harmless; replacing it with a
+  maintained fork (e.g. `http-proxy-3`) would silence it but means retesting
+  uploads and Realtime.
+
+The proxy logs the request **path only**, never the query string — the
+WebSocket URL carries `?apikey=<ANON_KEY>`, and `server.js` strips it
+(`req.url.split("?")[0]`) before logging. Keep it that way for any new log line.
+
+The image is built `FROM node:22-slim` (all three Dockerfile stages): on Node 20
+`@supabase/supabase-js` prints "Node.js 20 and below are deprecated" on every
+client creation. A production build passes on Node 22; if Coolify ever builds on
+an older base again that warning returns.
+
 ---
 
 ## Database schema
@@ -492,7 +522,7 @@ src/
   components/
     AppShell.tsx            — mobile-responsive shell: sidebar OR chat, never both on phones
     Sidebar.tsx             — conversation list, unread badges, new-chat modal, language switcher
-    ChatView.tsx            — message list, composer (arrow-icon send button), realtime subscription
+    ChatView.tsx            — message list, composer (arrow-icon send button), realtime subscription, replies, image layout
     AttachmentLink.tsx      — signed download links for private files
     AttachmentImage.tsx     — image attachment drawn as a picture in the bubble (see Image previews below)
     ImageViewer.tsx         — full-screen viewer for a message's pictures (portal, Esc/arrows, download)
@@ -779,9 +809,21 @@ fresh stack:**
 
 - Message editing UI (the DB schema and RLS policies already support it —
   `edited_at` column, update policy scoped to the sender — just no UI wired
-  up yet; deletion is already shipped, see "Deleting messages")
-- Channel renaming, leaving a channel, removing members
+  up yet; deletion and replies are already shipped, see "Deleting messages"
+  and "Replying to messages")
 - Per-channel notification mute / "don't notify while viewing" suppression
+- Channel renaming, leaving a channel, removing members
 - Message search
+- Image previews: server-side thumbnails (needs imgproxy / image
+  transformations enabled on Stack 7; today the full ~1 MB file is loaded),
+  pinch-zoom in the viewer, a "+N" cap on big grids
+- Replies: swipe-to-reply on phones, Esc to cancel, quote in the sidebar's
+  last-message line
+- Confirm the viewer's swipe feel on a real phone; the thresholds are constants
+  at the top of `ImageViewer.tsx`
+- Housekeeping: `npm run lint` reports pre-existing `react-hooks/set-state-in-effect`
+  errors in `ChatView.tsx`, `Sidebar.tsx`, `PushNotifications.tsx` and
+  `LanguageProvider.tsx` (the production build passes); swap `http-proxy` for a
+  maintained fork (gotcha #13)
 - More languages, if needed (add a new key to `translations.ts` and an
   option in `LanguageSwitcher.tsx`)
