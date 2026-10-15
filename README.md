@@ -494,6 +494,8 @@ src/
     Sidebar.tsx             — conversation list, unread badges, new-chat modal, language switcher
     ChatView.tsx            — message list, composer (arrow-icon send button), realtime subscription
     AttachmentLink.tsx      — signed download links for private files
+    AttachmentImage.tsx     — image attachment drawn as a picture in the bubble (see Image previews below)
+    ImageViewer.tsx         — full-screen viewer for a message's pictures (portal, Esc/arrows, download)
     NewChatModal.tsx        — pick teammates to start a DM or group
     LanguageSwitcher.tsx    — EN/RU dropdown, used in Sidebar + login/signup pages
     Avatar.tsx               — round avatar: shows the uploaded photo, or colored initials if none
@@ -510,6 +512,7 @@ src/
     translations.ts         — en/ru string dictionary (see gotcha #9)
     LanguageProvider.tsx    — context provider: locale, setLocale, t()
   lib/storage.ts            — safeStorageKey(): ASCII-only Storage object keys (see gotcha #11)
+  lib/attachments.ts        — isImageAttachment() + cached signed URLs for pictures (see Image previews below)
   lib/push.ts                — Web Push client helpers (VAPID key decoding, feature detection)
 supabase/migrations/
   0001_init.sql            — full schema, RLS policies, attachments storage bucket
@@ -604,6 +607,43 @@ Design notes:
   `originalDeleted` (EN + RU).
 - Not done: swipe-to-reply on phones, Esc to cancel, and replying shows no
   quote in the sidebar's last-message line.
+
+## Image previews
+
+Image attachments (JPEG, PNG, GIF, WebP, AVIF, BMP — decided by
+`attachments.content_type`, falling back to the file extension) are drawn as
+pictures inside the bubble instead of file rows, Telegram-style. Other files
+(PDF, ZIP, HEIC, SVG, …) keep the existing file rows.
+
+- **Layout (`ChatView.tsx`):** pictures run edge-to-edge in the bubble (negative
+  horizontal margins + `overflow-hidden` on the bubble). One picture keeps its
+  aspect ratio (max height `max-h-96`); two or more form a 2-column grid 18rem
+  wide, and with an odd count the first picture spans the full width. A message
+  with *only* pictures has no footer: the time and the reply/delete buttons sit
+  in a dark pill on the picture (`renderActions(..., overlay = true)`). With a
+  caption or other files the normal footer stays below.
+- **Loading (`AttachmentImage.tsx`):** the `attachments` bucket is private, so
+  each picture needs a signed URL. It is only requested when the picture comes
+  within ~300 px of the viewport (`IntersectionObserver`), so opening a long
+  chat doesn't fetch every photo. `lib/attachments.ts` caches signed URLs (1 h,
+  refreshed when <60 s left) and de-duplicates in-flight requests. If a picture
+  can't be loaded or decoded it falls back to the normal file row.
+- **Viewer (`ImageViewer.tsx`):** clicking a picture opens a full-screen viewer
+  (rendered in a portal so no stacking context clips it). Esc / click outside /
+  ✕ close it, ← → (or the arrow buttons) step through that message's pictures,
+  and the download button fetches a signed URL with `download: <file name>` so
+  the original name is kept.
+- **Scrolling:** pictures grow the list after the message is laid out. The chat
+  tracks whether the reader is near the bottom (`stickToBottomRef`) and, if so,
+  re-scrolls when a picture finishes loading. The first scroll when a chat opens
+  is instant (not smooth) so lazy pictures settle at the bottom, and
+  `channel/[id]/page.tsx` passes `key={channel.id}` so each conversation gets a
+  fresh `ChatView`.
+- **Not done:** server-side thumbnails (the full file is downloaded, ~1 MB each
+  for typical photos; Supabase image transformations would need imgproxy
+  enabled on Stack 7), pinch-zoom in the viewer, an image-only grid cap with a
+  "+N" overlay, and image previews in the sidebar's last-message line.
+- No migration, RLS or `server.js` changes.
 
 ## Circuit-board background
 

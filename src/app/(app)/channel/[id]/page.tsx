@@ -47,6 +47,7 @@ export default async function ChannelPage({
 
   return (
     <ChatView
+      key={channel.id}
       channel={channel}
       members={members}
       initialMessages={messages ?? []}

@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import type { Channel, Message, Profile, Attachment } from "@/lib/types";
 import { safeStorageKey } from "@/lib/storage";
 import AttachmentLink from "./AttachmentLink";
+import AttachmentImage from "./AttachmentImage";
+import ImageViewer from "./ImageViewer";
+import { isImageAttachment } from "@/lib/attachments";
 import Avatar from "./Avatar";
 import CircuitBackground, { type CircuitBackgroundHandle } from "./CircuitBackground";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -24,7 +27,7 @@ function formatTime(iso: string) {
 function previewText(m: Message) {
   if (m.body) return m.body;
   const first = m.attachments?.[0];
-  return first ? `📎 ${first.file_name}` : "";
+  return first ? `${isImageAttachment(first) ? "🖼" : "📎"} ${first.file_name}` : "";
 }
 
 export default function ChatView({
@@ -49,6 +52,10 @@ export default function ChatView({
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const firstScrollDoneRef = useRef(false);
+  const [viewer, setViewer] = useState<{ images: Attachment[]; index: number } | null>(null);
   const meshRef = useRef<CircuitBackgroundHandle>(null);
 
   const otherMember = channel.is_dm
@@ -65,7 +72,12 @@ export default function ChatView({
   const activeReply = replyTo && replyTo.channel_id === channel.id ? replyTo : null;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Jump (no animation) the first time so lazily-loaded pictures settle
+    // around the bottom instead of a long smooth scroll through placeholders.
+    bottomRef.current?.scrollIntoView({
+      behavior: firstScrollDoneRef.current ? "smooth" : "auto",
+    });
+    firstScrollDoneRef.current = true;
   }, [messages]);
 
   useEffect(() => {
@@ -233,6 +245,80 @@ export default function ChatView({
     window.setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1500);
   }
 
+  // Pictures load after the message is laid out and make the list taller. If
+  // the reader was at the bottom, keep them there.
+  function handleImageLoaded() {
+    if (stickToBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    }
+  }
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+  }
+
+  // Reply (+ delete for your own messages). `overlay` is the variant drawn on
+  // top of a picture, with light-on-dark colours.
+  function renderActions(m: Message, isMine: boolean, overlay: boolean) {
+    const tone = overlay
+      ? "text-white/90 hover:bg-white/20"
+      : isMine
+        ? "text-indigo-200/80 hover:bg-indigo-500 hover:text-white"
+        : "text-neutral-500 hover:bg-neutral-700 hover:text-neutral-200";
+    const icon = "h-4 w-4 md:h-3.5 md:w-3.5";
+    return (
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => startReply(m)}
+          aria-label={t("reply")}
+          title={t("reply")}
+          className={`rounded p-1 ${tone}`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={icon}
+          >
+            <path d="M9 14L4 9l5-5" />
+            <path d="M4 9h10a6 6 0 0 1 6 6v3" />
+          </svg>
+        </button>
+        {isMine && (
+          <button
+            type="button"
+            onClick={() => handleDelete(m)}
+            aria-label={t("deleteMessage")}
+            title={t("deleteMessage")}
+            className={`rounded p-1 ${tone}`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={icon}
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="M19 6l-1 14H6L5 6" />
+              <path d="M10 11v6M14 11v6" />
+            </svg>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   async function handleDelete(m: Message) {
     if (!window.confirm(t("deleteMessageConfirm"))) return;
     try {
@@ -275,7 +361,11 @@ export default function ChatView({
 
       <div className="relative min-h-0 flex-1 overflow-hidden bg-neutral-950">
         <CircuitBackground ref={meshRef} />
-        <div className="relative h-full space-y-4 overflow-y-auto px-6 py-4">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="relative h-full space-y-4 overflow-y-auto px-6 py-4"
+        >
         {messages.map((m) => {
           const isMine = m.sender_id === currentUserId;
           const sender =
@@ -288,6 +378,13 @@ export default function ChatView({
             ? (quoted.sender ?? members.find((mem) => mem.id === quoted.sender_id))
                 ?.display_name ?? t("someone")
             : "";
+          // Pictures are drawn edge-to-edge in the bubble; other files stay
+          // as file rows. A message with only pictures gets the time and the
+          // reply/delete buttons overlaid on the picture instead of a footer.
+          const images = (m.attachments ?? []).filter(isImageAttachment);
+          const otherFiles = (m.attachments ?? []).filter((a) => !isImageAttachment(a));
+          const imageOnly = images.length > 0 && !m.body && otherFiles.length === 0;
+          const imagesAtTop = isMine && !m.reply_to_id;
           return (
             <div
               key={m.id}
@@ -299,6 +396,8 @@ export default function ChatView({
               )}
               <div
                 className={`max-w-[80%] rounded-lg px-4 py-2 text-base transition-shadow md:max-w-[70%] md:text-sm ${
+                  images.length > 0 ? "overflow-hidden" : ""
+                } ${
                   isMine ? "bg-indigo-600 text-white" : "bg-neutral-800 text-neutral-100"
                 } ${highlightId === m.id ? "ring-2 ring-amber-400" : ""}`}
               >
@@ -342,73 +441,65 @@ export default function ChatView({
                       {t("originalDeleted")}
                     </p>
                   ))}
+                {images.length > 0 && (
+                  <div
+                    className={`relative -mx-4 ${imagesAtTop ? "-mt-2" : "mt-1"} ${
+                      imageOnly ? "-mb-2" : "mb-2"
+                    }`}
+                  >
+                    {images.length === 1 ? (
+                      <AttachmentImage
+                        variant="single"
+                        attachment={images[0]}
+                        onOpen={() => setViewer({ images, index: 0 })}
+                        onLoaded={handleImageLoaded}
+                      />
+                    ) : (
+                      <div className="grid w-72 max-w-full grid-cols-2 gap-0.5">
+                        {images.map((a, i) => (
+                          <AttachmentImage
+                            key={a.id}
+                            variant="tile"
+                            attachment={a}
+                            // With an odd count the first picture spans the
+                            // full width, so the grid has no hole.
+                            className={
+                              images.length % 2 === 1 && i === 0
+                                ? "col-span-2 aspect-[2/1]"
+                                : "aspect-square"
+                            }
+                            onOpen={() => setViewer({ images, index: i })}
+                            onLoaded={handleImageLoaded}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {imageOnly && (
+                      <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/55 py-0.5 pl-2 pr-1 text-xs text-white md:text-[10px]">
+                        <span>{formatTime(m.created_at)}</span>
+                        {renderActions(m, isMine, true)}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
-                {m.attachments && m.attachments.length > 0 && (
+                {otherFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {m.attachments.map((a) => (
+                    {otherFiles.map((a) => (
                       <AttachmentLink key={a.id} attachment={a} />
                     ))}
                   </div>
                 )}
-                <div
-                  className={`mt-1 flex items-center justify-between gap-2 text-xs md:text-[10px] ${
-                    isMine ? "text-indigo-200" : "text-neutral-500"
-                  }`}
-                >
-                  <span>{formatTime(m.created_at)}</span>
-                  <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => startReply(m)}
-                    aria-label={t("reply")}
-                    title={t("reply")}
-                    className={`rounded p-1 ${
-                      isMine
-                        ? "text-indigo-200/80 hover:bg-indigo-500 hover:text-white"
-                        : "text-neutral-500 hover:bg-neutral-700 hover:text-neutral-200"
+                {!imageOnly && (
+                  <div
+                    className={`mt-1 flex items-center justify-between gap-2 text-xs md:text-[10px] ${
+                      isMine ? "text-indigo-200" : "text-neutral-500"
                     }`}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-4 w-4 md:h-3.5 md:w-3.5"
-                    >
-                      <path d="M9 14L4 9l5-5" />
-                      <path d="M4 9h10a6 6 0 0 1 6 6v3" />
-                    </svg>
-                  </button>
-                  {isMine && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(m)}
-                      aria-label={t("deleteMessage")}
-                      title={t("deleteMessage")}
-                      className="-mr-1 rounded p-1 text-indigo-200/80 hover:bg-indigo-500 hover:text-white"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-4 w-4 md:h-3.5 md:w-3.5"
-                      >
-                        <path d="M3 6h18" />
-                        <path d="M8 6V4h8v2" />
-                        <path d="M19 6l-1 14H6L5 6" />
-                        <path d="M10 11v6M14 11v6" />
-                      </svg>
-                    </button>
-                  )}
+                    <span>{formatTime(m.created_at)}</span>
+                    {renderActions(m, isMine, false)}
                   </div>
-                </div>
+                )}
               </div>
             </div>
           );
@@ -514,6 +605,14 @@ export default function ChatView({
           </button>
         </div>
       </form>
+
+      {viewer && (
+        <ImageViewer
+          images={viewer.images}
+          startIndex={viewer.index}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </div>
   );
 }

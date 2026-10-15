@@ -27,6 +27,13 @@ export const translations = {
     replyingTo: "Replying to",
     cancelReply: "Cancel reply",
     originalDeleted: "Message deleted",
+    // Image viewer
+    close: "Close",
+    download: "Download",
+    downloadFailed: "Couldn't download this file. Please try again.",
+    imageLoadFailed: "Couldn't load this image.",
+    previousImage: "Previous image",
+    nextImage: "Next image",
     // New chat modal
     newMessageTitle: "New message",
     groupNameLabel: "Group name (leave blank for a 1:1 chat)",
@@ -95,6 +102,13 @@ export const translations = {
     replyingTo: "Ответ для",
     cancelReply: "Отменить ответ",
     originalDeleted: "Сообщение удалено",
+    // Image viewer
+    close: "Закрыть",
+    download: "Скачать",
+    downloadFailed: "Не удалось скачать файл. Попробуйте снова.",
+    imageLoadFailed: "Не удалось загрузить изображение.",
+    previousImage: "Предыдущее изображение",
+    nextImage: "Следующее изображение",
     // New chat modal
     newMessageTitle: "Новое сообщение",
     groupNameLabel: "Название группы (оставьте пустым для личного чата)",
