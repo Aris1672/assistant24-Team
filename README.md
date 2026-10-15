@@ -629,10 +629,19 @@ pictures inside the bubble instead of file rows, Telegram-style. Other files
   refreshed when <60 s left) and de-duplicates in-flight requests. If a picture
   can't be loaded or decoded it falls back to the normal file row.
 - **Viewer (`ImageViewer.tsx`):** clicking a picture opens a full-screen viewer
-  (rendered in a portal so no stacking context clips it). Esc / click outside /
-  ✕ close it, ← → (or the arrow buttons) step through that message's pictures,
-  and the download button fetches a signed URL with `download: <file name>` so
-  the original name is kept.
+  (rendered in a portal so no stacking context clips it). The message's pictures
+  are laid out as a horizontal strip that is shifted to show the current one.
+  **Swipe** (touch, also mouse-drag) sideways to move between them — the strip
+  follows the finger and snaps on release (distance > 50 px, or a flick faster
+  than 0.3 px/ms over ≥ 30 px; thresholds are constants at the top of the file).
+  The axis locks after 8 px, dragging past the first/last picture rubber-bands
+  instead of wrapping, and dragging up/down > 120 px dismisses (the backdrop
+  fades while dragging). Pointer events + `touch-action: none` on the strip
+  drive it; a drag never counts as a tap-to-close (`suppressClick`). Also: Esc /
+  click outside / ✕ close; ← → keys and (≥ `md` screens only) arrow buttons
+  step; the header shows `n / total`; the download button fetches a signed URL
+  with `download: <file name>` so the original name is kept. Only the current
+  picture and its two neighbours are loaded.
 - **Scrolling:** pictures grow the list after the message is laid out. The chat
   tracks whether the reader is near the bottom (`stickToBottomRef`) and, if so,
   re-scrolls when a picture finishes loading. The first scroll when a chat opens
